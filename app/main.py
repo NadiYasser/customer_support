@@ -1,10 +1,16 @@
 """FastAPI entrypoint.
 
-Milestone M0: only /health is wired up. /chat and /resume are stubs that we'll
-implement once the LangGraph graph exists (M1+).
+M2: /chat invokes the FAQ/RAG agent (single-turn, no memory yet). This is
+TEMPORARY — until M3 adds the supervisor that routes between agents, we point
+/chat directly at the agent we're currently exercising.
+/resume is still a stub until M4 (human-in-the-loop).
 """
 from fastapi import FastAPI
+from groq import BadRequestError
+from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
+
+from app.agents.faq_rag import faq_rag_agent
 
 app = FastAPI(title="AI Customer Support Platform")
 
@@ -26,8 +32,22 @@ class ResumeRequest(BaseModel):
 
 @app.post("/chat")
 def chat(req: ChatRequest):
-    # TODO(M1+): invoke the LangGraph graph with req.message on thread req.thread_id.
-    return {"status": "not_implemented", "detail": "chat is wired up in milestone M1+"}
+    # M2 (temporary): run the FAQ/RAG agent loop on the single incoming message.
+    # M3 will replace this with the supervisor, which routes to the right agent.
+    # thread_id is accepted now but unused until M5 adds memory.
+    try:
+        result = faq_rag_agent.invoke({"messages": [HumanMessage(req.message)]})
+    except BadRequestError:
+        # The Groq Llama model occasionally emits a malformed tool call
+        # (tool_use_failed): it picks the right tool but serializes the call as
+        # text instead of JSON, so Groq rejects it. It's intermittent — a retry
+        # usually works — so we surface a friendly retry message instead of a 500.
+        return {
+            "thread_id": req.thread_id,
+            "reply": "Sorry, I hit a hiccup processing that. Please try again.",
+        }
+    answer = result["messages"][-1].content
+    return {"thread_id": req.thread_id, "reply": answer}
 
 
 @app.post("/resume")
