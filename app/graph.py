@@ -18,9 +18,29 @@ The agents share our SupportState because they key on "messages" with the same
 add_messages reducer — an agent reads the messages, appends its reply, and that
 update merges back into the shared state.
 
-Memory: M3 compiles WITHOUT a checkpointer, so each /chat call is single-turn.
-M5 attaches a checkpointer keyed by thread_id for multi-turn memory.
+Memory (M4): the graph compiles WITH a checkpointer. LangGraph snapshots the
+state after every step, keyed by the thread_id passed in the call config. On the
+next call with the same thread_id, it restores that snapshot before applying the
+new input — and because "messages" uses the add_messages reducer (append, not
+overwrite), the new turn piles onto the restored history. Persistence + an
+appending reducer = multi-turn memory.
+
+We use SqliteSaver: snapshots are written to a file on disk, so conversations
+survive a server restart (unlike MemorySaver's in-process dict). A file-backed
+saver needs an open DB connection, which has a lifecycle MemorySaver never had —
+the connection must outlive every request. Since the graph compiles ONCE at
+import and lives as long as the process, we open one sqlite3 connection here and
+hand it to SqliteSaver; its lifetime is tied to the process, which is what we
+want for a long-running server.
+
+check_same_thread=False: uvicorn serves requests on a thread pool, but a sqlite3
+connection is bound to its creating thread by default. We share one connection
+across worker threads; SqliteSaver serializes its own writes, so this is safe.
 """
+import sqlite3
+from pathlib import Path
+
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.faq_rag import faq_rag_agent
@@ -38,6 +58,10 @@ _AGENT_NODES = {
     "modify": modify_agent,
     "it_support": it_support_agent,
 }
+
+# Where the conversation snapshots live. Absolute path derived from this module's
+# location so the DB is the same file no matter the server's launch directory.
+_DB_PATH = str(Path(__file__).parent / "data" / "checkpoints.sqlite")
 
 
 def _pick_route(state: SupportState) -> str:
@@ -65,7 +89,13 @@ def build_graph():
     for name in _AGENT_NODES:
         graph.add_edge(name, END)
 
-    return graph.compile()
+    # The checkpointer is what turns this from a single-shot graph into a
+    # stateful one. Without it, .invoke starts from whatever dict you pass.
+    # With it, LangGraph loads the saved snapshot for the call's thread_id first.
+    # SqliteSaver persists those snapshots to checkpoints.sqlite on disk, so the
+    # conversation history outlives a server restart.
+    conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
+    return graph.compile(checkpointer=SqliteSaver(conn))
 
 
 # Compiled once at import; main.py invokes this.

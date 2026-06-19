@@ -26,6 +26,11 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001")
 CHROMA_DIR = "chroma_db"
 KB_COLLECTION = "knowledge_base"
 
+# M5 HITL: refunds at/above this amount pause for human approval (interrupt()).
+# Below it, the refund tool writes immediately. Read from env so the gate is
+# tunable without code changes.
+REFUND_APPROVAL_THRESHOLD = float(os.getenv("REFUND_APPROVAL_THRESHOLD", "100.0"))
+
 
 def get_model() -> ChatGroq:
     """Return the shared Groq chat model.

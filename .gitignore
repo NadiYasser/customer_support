@@ -11,6 +11,9 @@ venv/
 # Local vector store
 chroma_db/
 *.sqlite3
+# LangGraph checkpointer DB (+ WAL/SHM sidecars)
+*.sqlite
+*.sqlite-*
 
 
 CLAUDE.md

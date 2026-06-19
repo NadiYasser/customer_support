@@ -1,12 +1,10 @@
-"""Refund agent (M3) — human-in-the-loop gate comes in M4.
+"""Refund agent (M5) — human-in-the-loop gate lives in the tool.
 
-Same shape as tracking.py: a create_react_agent loop with one tool, process_refund.
+Same shape as tracking.py: a create_agent loop with one tool, process_refund.
 The agent figures out the order ID and amount from the conversation and calls the
-tool.
-
-M3 scope: the refund executes immediately when the agent calls the tool. M4 adds
-the interrupt() approval gate so refunds at/above REFUND_APPROVAL_THRESHOLD pause
-for human approval first.
+tool. The approval gate is inside process_refund (app/tools/refund.py): refunds
+at/above REFUND_APPROVAL_THRESHOLD call interrupt() to pause for human approval
+before the repository write; below-threshold refunds execute immediately.
 """
 from langchain.agents import create_agent
 
