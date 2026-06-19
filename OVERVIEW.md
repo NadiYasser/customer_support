@@ -154,8 +154,14 @@ We build one mechanism at a time so each is understood before the next is added.
 | **M1 — One agent + tool loop** | Order tracking agent with `get_order_status` over a LangGraph ReAct loop | The **agent loop & tool calling** | "Where's order 1001?" returns real status from `orders.json` |
 | **M2 — RAG** | KB ingest → Chroma; FAQ/RAG agent with `search_kb` | **Retrieval & grounding** | A policy question returns a grounded answer citing KB text |
 | **M3 — Supervisor + multi-agent** | Supervisor routing node wiring M1 + M2 + refund/modify/IT agents | **Orchestration / routing** | Mixed questions get routed to the correct agent |
-| **M4 — HITL approval** | `interrupt()` gate on large refunds; `/resume` endpoint | **Human-in-the-loop** | Small refund auto-completes; large refund pauses then resumes via `/resume` |
-| **M5 — Memory** | Checkpointer + `thread_id` end to end | **State & multi-turn memory** | "Where's my order?" → "ok refund it" works across turns |
+| **M4 — Memory** | Checkpointer + `thread_id` end to end | **State & multi-turn memory** | "Where's my order?" → "ok refund it" works across turns |
+| **M5 — HITL approval** | `interrupt()` gate on large refunds; `/resume` endpoint | **Human-in-the-loop** | Small refund auto-completes; large refund pauses then resumes via `/resume` |
+
+> **Why memory before HITL:** LangGraph's `interrupt()` works by checkpointing the
+> graph state at the pause point and resuming from it — which requires the same
+> checkpointer that multi-turn memory needs. Building memory first means the HITL
+> milestone lands on infrastructure that already exists, instead of introducing the
+> checkpointer as a side effect of the approval gate.
 
 ## 8. Out of scope (for now)
 

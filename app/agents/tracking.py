@@ -4,7 +4,7 @@ Read-only. Tool: get_order_status(order_id) -> status, ETA, tracking number.
 This is where we learn the basic agent loop: LLM decides to call the tool,
 we run it, feed the result back, LLM writes the final answer.
 """
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 
 from app.config import get_model
 from app.tools.orders import get_order_status
@@ -19,8 +19,8 @@ SYSTEM_PROMPT = (
 # create_react_agent builds the agent loop for us:
 #   model + tools + system prompt  ->  a runnable graph that loops
 #   (call model -> run any requested tool -> call model again -> ... -> answer)
-tracking_agent = create_react_agent(
+tracking_agent = create_agent(
     model=get_model(),
     tools=[get_order_status],
-    prompt=SYSTEM_PROMPT,
+    system_prompt=SYSTEM_PROMPT,
 )
