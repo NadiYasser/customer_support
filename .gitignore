@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Secrets
+.env
+.env.*
+# Local vector store
+chroma_db/
+*.sqlite3
+
+
+CLAUDE.md
+pyproject.toml
+.claude
