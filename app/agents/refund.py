@@ -9,18 +9,21 @@ before the repository write; below-threshold refunds execute immediately.
 from langchain.agents import create_agent
 
 from app.config import get_model
+from app.tools.orders import get_order_total
 from app.tools.refund import process_refund
 
 SYSTEM_PROMPT = (
     "You are a customer support assistant for an online store. "
     "Help customers with refunds. When a customer asks for a refund, determine the "
-    "order ID and the refund amount, then use the process_refund tool. If you are "
-    "missing the order ID or the amount, ask for it before refunding. "
+    "order ID and the refund amount, then use the process_refund tool. "
+    "If the customer wants a full refund but does not state an amount, do NOT ask "
+    "them for it — call get_order_total to look up what they paid and refund that. "
+    "Only ask the customer when the order ID itself is missing. "
     "Answer in a friendly, concise way."
 )
 
 refund_agent = create_agent(
     model=get_model(),
-    tools=[process_refund],
+    tools=[get_order_total, process_refund],
     system_prompt=SYSTEM_PROMPT,
 )

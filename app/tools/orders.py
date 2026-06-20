@@ -31,3 +31,19 @@ def get_order_status(order_id: str) -> str:
         f"status={order['status']}, ETA={order['eta']}, "
         f"tracking={order['tracking_number'] or 'not yet assigned'}."
     )
+
+
+@tool
+def get_order_total(order_id: str) -> str:
+    """Look up how much a customer paid for an order, by its order ID.
+
+    Use this to find the refund amount when a customer asks for a full refund
+    but does not state a figure — look up what they paid instead of asking them.
+
+    Args:
+        order_id: The order's ID, e.g. "1001".
+    """
+    order = _orders.get_order(order_id)
+    if order is None:
+        return f"No order found with ID {order_id}."
+    return f"Order {order['order_id']} total paid: {order['total']}."

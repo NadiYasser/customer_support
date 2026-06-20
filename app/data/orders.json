@@ -12,7 +12,7 @@
     "order_id": "1002",
     "customer": "Sara L.",
     "items": ["Running Shoes (size 41)"],
-    "total": 89.00,
+    "total": 150.00,
     "status": "processing",
     "eta": "2026-06-25",
     "tracking_number": null
