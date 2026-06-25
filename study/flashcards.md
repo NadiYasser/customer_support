@@ -76,6 +76,11 @@ Cover the answer, say yours out loud, reveal. One-liners; deep dives live in
 > Hybrid (vector + keyword/BM25), re-ranking, better chunking, query rewriting, metadata
 > filters.
 
+**Q: How does the agent cite its source?**
+> Provenance (file + section) is stored in chunk metadata at ingest and returned prefixed to
+> each chunk; the agent echoes the section it used on a `Source:` line. Citation = exposing
+> provenance the pipeline already tracked.
+
 ---
 
 ## State & memory → [04](concepts/04-state-and-memory.md)
@@ -168,6 +173,35 @@ Cover the answer, say yours out loud, reveal. One-liners; deep dives live in
 **Q: Faithfulness vs helpfulness?**
 > "I don't have that info" is faithful (invents nothing) but unhelpful. Judging grounding only
 > is what makes the judge reliable.
+
+---
+
+## Retrieval precision & out-of-scope rejection → [08](concepts/08-retrieval-precision.md)
+
+**Q: 100% hit-rate — is retrieval solved?**
+> No. Hit-rate is *recall*, measured only on in-scope questions. It ignores precision: top-k
+> still returns k chunks for an out-of-scope question, so it gets answered from junk.
+
+**Q: Recall vs precision in retrieval?**
+> Recall = did the gold chunk come back for an in-scope query (hit-rate@k). Precision = is what
+> came back relevant, including correctly returning *nothing* for out-of-scope queries.
+
+**Q: How do you stop RAG answering out-of-scope questions?**
+> Score-threshold retrieval: keep a chunk only if its relevance clears a floor; if none do,
+> return nothing and have the agent decline.
+
+**Q: How do you pick the threshold?**
+> Empirically. Score an in-scope set and an off-topic set, place the floor in the gap between
+> lowest in-scope and highest off-topic. Overlap → it's a precision/recall tradeoff, not a clean cut.
+
+**Q: Cost of threshold too high vs too low?**
+> Too high → false negatives (real-but-weak questions rejected). Too low → false positives
+> (off-topic questions answered from irrelevant chunks).
+
+**Q: Why two decline paths?**
+> Tool-level (gate returns empty → NO_MATCH) for plausible-but-uncovered questions, AND
+> agent-level (system prompt) for blatantly off-topic input the model refuses without ever
+> calling the tool. Fix only one and the other dead-ends.
 
 ---
 

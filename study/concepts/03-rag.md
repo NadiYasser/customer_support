@@ -58,6 +58,16 @@ the tool **returns the raw retrieved chunks, not a finished answer**. The
 system prompt enforces the grounding discipline: *answer ONLY from retrieved text; if the KB
 doesn't cover it, say so rather than inventing policy.*
 
+**Citations** ride on provenance for free. Each chunk is returned prefixed with its source —
+`[returns_policy.md — Sale items]` — built from the metadata captured at ingest. The agent is
+prompted to echo the section(s) it used on a `Source:` line after its answer, and to omit it
+when it had no relevant chunk. The citation is just exposing provenance the pipeline already
+tracked; no extra retrieval needed.
+
+> Retrieval **precision** — returning *nothing* when no chunk is actually relevant, so the agent
+> declines instead of grounding on junk — is a separate concern covered in
+> [08 — Retrieval Precision](08-retrieval-precision.md).
+
 ## Key terms
 
 | Term | Meaning |

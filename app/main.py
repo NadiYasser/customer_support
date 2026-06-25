@@ -10,14 +10,17 @@ via Command(resume=...). Below-threshold refunds and all other turns finish in
 one shot, exactly as before.
 """
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from groq import BadRequestError
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 from pydantic import BaseModel
+import json
 
 from app.graph import support_graph
 from app.observability.collector import TraceCollector
 from app.observability.format import format_trace
+from app.streaming import stream_answer
 
 app = FastAPI(title="AI Customer Support Platform")
 

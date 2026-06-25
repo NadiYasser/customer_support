@@ -1,0 +1,32 @@
+[
+  {
+    "id": "neg-weather",
+    "question": "What is the weather in Paris today?",
+    "reason": "general knowledge, nothing to do with the store"
+  },
+  {
+    "id": "neg-math",
+    "question": "What's 17 times 23?",
+    "reason": "arithmetic, no KB section answers it"
+  },
+  {
+    "id": "neg-code",
+    "question": "Write me a python function to sort a list.",
+    "reason": "coding request, out of support scope"
+  },
+  {
+    "id": "neg-ceo",
+    "question": "Who is the CEO of the company?",
+    "reason": "company info not present in the policy KB"
+  },
+  {
+    "id": "neg-giftwrap",
+    "question": "Do you offer gift wrapping?",
+    "reason": "plausible store question, but the KB has no such policy (borderline case)"
+  },
+  {
+    "id": "neg-pricematch",
+    "question": "Will you match a competitor's lower price?",
+    "reason": "plausible store question, no price-match policy in the KB"
+  }
+]

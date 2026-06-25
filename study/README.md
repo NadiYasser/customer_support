@@ -11,8 +11,8 @@ questions and answers.
 - **Want to actually understand a mechanism?** Read the matching `concepts/` page. Each
   links to the real file in this repo (`Where it lives in this codebase`) so you can read
   the implementation right after the theory.
-- **Reviewing the whole system?** Read the concept pages in order 01 → 07; they follow the
-  build roadmap (M1 → M6) and each builds on the last.
+- **Reviewing the whole system?** Read the concept pages in order 01 → 08; they follow the
+  build roadmap (M1 → M8) and each builds on the last.
 
 ## Concept index
 
@@ -25,6 +25,7 @@ questions and answers.
 | 05 | [Human-in-the-loop (HITL)](concepts/05-human-in-the-loop.md) | Pause the graph at a risky action, resume after human approval | M5 |
 | 06 | [Structured output](concepts/06-structured-output.md) | Force the model to return a schema, not free text | M3 (routing) |
 | 07 | [Evaluation](concepts/07-evaluation.md) | Measure routing accuracy, retrieval hit-rate, faithfulness (LLM-judge) | M6 |
+| 08 | [Retrieval precision & out-of-scope rejection](concepts/08-retrieval-precision.md) | Score-threshold retrieval → decline when nothing is relevant | M8 |
 
 ## The system in one paragraph
 
@@ -34,5 +35,6 @@ its tools, feeds results back, writes a grounded answer. The FAQ agent's tool do
 (retrieve KB chunks from Chroma, answer only from them). The refund agent's tool has a
 **human-in-the-loop** gate: large refunds `interrupt()` the graph and wait for `/resume`.
 All of this is **stateful** — a SQLite checkpointer keyed by `thread_id` gives multi-turn
-memory and is also what makes resume-after-interrupt work. **Evaluation** measures each
-layer independently.
+memory and is also what makes resume-after-interrupt work. The FAQ agent gates retrieval on a
+**relevance threshold**, so out-of-scope questions get a polite decline instead of an answer
+grounded on irrelevant chunks. **Evaluation** measures each layer independently.

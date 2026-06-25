@@ -31,6 +31,13 @@ KB_COLLECTION = "knowledge_base"
 # tunable without code changes.
 REFUND_APPROVAL_THRESHOLD = float(os.getenv("REFUND_APPROVAL_THRESHOLD", "100.0"))
 
+# M8 RAG precision: a retrieved chunk counts as "relevant" only if its relevance
+# score (0..1, higher = closer) clears this floor. Below it we treat the KB as
+# having NO answer, so the agent declines instead of grounding on irrelevant
+# text. The value sits inside the measured in-scope/off-topic gap — see
+# app/eval/test_retrieval_precision.py (in-scope >= 0.564, off-topic <= 0.507).
+RAG_RELEVANCE_THRESHOLD = float(os.getenv("RAG_RELEVANCE_THRESHOLD", "0.53"))
+
 
 def get_model() -> ChatGroq:
     """Return the shared Groq chat model.
