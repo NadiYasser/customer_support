@@ -4,11 +4,15 @@ Wires the supervisor + the five specialized agents into ONE runnable graph.
 
 Control flow:
 
-    START → supervisor → (conditional edge on state["route"]) → one agent → END
+    START → input_guard → (blocked? → END)
+                        → supervisor → (conditional edge on state["route"]) → one agent → END
 
 - add_node registers each piece as a node. The prebuilt agents are themselves
   runnables, so they slot in directly as nodes.
-- START always goes to the supervisor: every turn is classified first.
+- START goes to the input_guard (M10): a deterministic prompt-injection gate runs
+  before any LLM. If it flags the message, a conditional edge jumps straight to END
+  (the guard already appended a refusal) so no supervisor/agent/tool ever runs.
+- Otherwise control passes to the supervisor: every non-blocked turn is classified.
 - add_conditional_edges is the routing made literal. After the supervisor runs,
   _pick_route(state) returns state["route"], and the mapping below sends control
   to the matching agent node.
@@ -49,8 +53,40 @@ from app.agents.it_support import it_support_agent
 from app.agents.modify import modify_agent
 from app.agents.refund import refund_agent
 from app.agents.tracking import tracking_agent
+from app.guards.injection import detect_injection
 from app.state import SupportState
 from app.supervisor import supervisor
+
+# What the user sees when the input guard blocks a turn (M10). Deliberately generic:
+# we don't echo the matched pattern or explain the detector, which would just teach
+# an attacker how to word around it.
+BLOCKED_MESSAGE = (
+    "I can't help with that request. I'm here to help with this store's orders and "
+    "support — tracking, refunds, returns, order changes, and policy questions. "
+    "What can I help you with?"
+)
+
+
+def input_guard(state: SupportState) -> dict:
+    """M10 — the security gate that runs BEFORE the supervisor.
+
+    A node is just `state -> partial update`. This one inspects the latest customer
+    message with a deterministic detector (app/guards/injection.py). On a hit it
+    sets blocked=True and appends a canned refusal; otherwise it clears the flag so
+    a prior turn's block doesn't linger in the restored state.
+
+    Why a separate node in FRONT of the supervisor, instead of a check inside it?
+    The supervisor and agents are the LLMs we're defending — one of them can issue
+    refunds. A guard's value is being INDEPENDENT of what it protects: a regex gate
+    can't be argued out of its verdict by "ignore your instructions" text, which is
+    the whole point of an injection. Putting it ahead of the supervisor means a
+    flagged message never reaches any model or tool.
+    """
+    last_message = state["messages"][-1]
+    hit = detect_injection(last_message.content)
+    if hit:
+        return {"blocked": True, "messages": [AIMessage(BLOCKED_MESSAGE)]}
+    return {"blocked": False}
 
 _AGENT_NODES = {
     "faq_rag": faq_rag_agent,
@@ -97,15 +133,31 @@ def _pick_route(state: SupportState) -> str:
     return state["route"]
 
 
+def _guard_gate(state: SupportState) -> str:
+    # The conditional edge AFTER the input guard. Reads the blocked flag the guard
+    # set and turns it into control flow: blocked → END (skip everything), else →
+    # supervisor. Same decision-becomes-control-flow trick as _pick_route, used as
+    # a safety gate at the front of the graph.
+    return "blocked" if state.get("blocked") else "supervisor"
+
+
 def build_graph():
     graph = StateGraph(SupportState)
 
+    graph.add_node("input_guard", input_guard)
     graph.add_node("supervisor", supervisor)
     for name, agent in _AGENT_NODES.items():
         graph.add_node(name, agent)
     graph.add_node("out_of_scope", out_of_scope)
 
-    graph.add_edge(START, "supervisor")
+    # Every turn enters the guard first. Its conditional edge either short-circuits
+    # to END (flagged) or hands off to the supervisor (clean).
+    graph.add_edge(START, "input_guard")
+    graph.add_conditional_edges(
+        "input_guard",
+        _guard_gate,
+        {"blocked": END, "supervisor": "supervisor"},
+    )
     # Map each route value to its node. The keys here MUST match the route names
     # the supervisor can emit — including out_of_scope, which maps to the canned
     # refusal node rather than an LLM agent.

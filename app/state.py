@@ -15,6 +15,14 @@ Two fields for M3:
   turn ("faq_rag", "tracking", ...). A conditional edge then reads this field to
   decide which agent node runs next. This single field is how a *decision* made by
   the supervisor becomes actual *control flow* in the graph.
+
+- blocked (M10): the input-guard node sets this True when it detects a
+  prompt-injection attempt. A conditional edge after the guard reads it: blocked →
+  jump straight to END (the guard already appended a refusal to messages), not
+  blocked → continue to the supervisor. Same decision-becomes-control-flow trick as
+  `route`, used here as a safety gate in FRONT of the orchestrator. It's a plain
+  bool (no reducer), so each turn's guard decision overwrites the previous one
+  instead of accumulating.
 """
 from typing import Annotated, TypedDict
 
@@ -24,3 +32,4 @@ from langgraph.graph.message import add_messages
 class SupportState(TypedDict):
     messages: Annotated[list, add_messages]
     route: str
+    blocked: bool

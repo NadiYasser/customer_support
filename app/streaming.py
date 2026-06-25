@@ -26,7 +26,8 @@ from collections.abc import Iterator
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from app.graph import support_graph, OUT_OF_SCOPE_MESSAGE
+from app.graph import support_graph, OUT_OF_SCOPE_MESSAGE, BLOCKED_MESSAGE
+from app.guards.injection import detect_injection
 from app.supervisor import supervisor
 from app.agents.faq_rag import faq_rag_agent
 from app.agents.it_support import it_support_agent
@@ -66,6 +67,17 @@ def stream_answer(thread_id: str, message: str) -> Iterator[str]:
     history = snapshot.values.get("messages", []) if snapshot.values else []
     human = HumanMessage(message)
     agent_input = {"messages": history + [human]}
+
+    # M10 input guard. The compiled graph runs this as a node before the supervisor,
+    # but this path bypasses the graph — so we mirror the gate here, same as we do
+    # for out_of_scope below. A flagged message never reaches the supervisor, any
+    # agent, or any tool: yield the canned refusal, persist, stop.
+    if detect_injection(message):
+        yield BLOCKED_MESSAGE
+        support_graph.update_state(
+            config, {"messages": [human, AIMessage(BLOCKED_MESSAGE)]}
+        )
+        return
 
     # 1) Route. One quick invoke; the supervisor reads only the latest message.
     route = supervisor({"messages": [human]})["route"]
