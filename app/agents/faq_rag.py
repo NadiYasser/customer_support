@@ -19,7 +19,12 @@ SYSTEM_PROMPT = (
     "FAQ — by calling the search_kb tool and basing your answer ONLY on what it "
     "returns. Do not rely on prior knowledge for policy details. "
     "If the knowledge base does not contain the answer, say you don't have that "
-    "information rather than guessing. Keep answers friendly and concise."
+    "information rather than guessing. Keep answers friendly and concise. "
+    "Each chunk search_kb returns is prefixed with its source in the form "
+    "[file — section]. After your answer, cite the section(s) you used on a new "
+    "line starting with 'Source:' (e.g. 'Source: returns_policy.md — Sale items'). "
+    "Only cite sections you actually used; if you had no relevant KB entry, do not "
+    "add a Source line."
 )
 
 faq_rag_agent = create_agent(

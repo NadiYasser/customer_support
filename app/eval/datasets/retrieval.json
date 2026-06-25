@@ -43,5 +43,35 @@
     "id": "ret-damaged",
     "question": "The product arrived broken, what are my options?",
     "expected_section": "Damaged or defective items"
+  },
+  {
+    "id": "code-warranty",
+    "question": "What is WRTY-2YR and what do I do with it?",
+    "expected_section": "Warranty registration"
+  },
+  {
+    "id": "code-rma",
+    "question": "Do I need an RMA number to send something back?",
+    "expected_section": "RMA process"
+  },
+  {
+    "id": "sku-desk-leg",
+    "question": "How do I order part ADP-5000-LEG?",
+    "expected_section": "AeroDesk Pro 5000 desk"
+  },
+  {
+    "id": "sku-chair-caster",
+    "question": "Where can I buy NVC-220-CAST replacements?",
+    "expected_section": "NovaChair ergonomic chair"
+  },
+  {
+    "id": "acr-cod",
+    "question": "Can I pay with COD?",
+    "expected_section": "COD and payment methods"
+  },
+  {
+    "id": "acr-gdpr",
+    "question": "How do I make a GDPR request?",
+    "expected_section": "GDPR data requests"
   }
 ]

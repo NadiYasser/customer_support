@@ -25,7 +25,7 @@ it actually helped.
 |---|---|---|---|
 | **M6 — Evaluation harness** | pytest + labeled datasets; routing-accuracy, RAG-faithfulness/hit-rate, and LLM-as-judge evals | How to measure non-deterministic systems and catch regressions | `pytest` reports routing accuracy and a RAG faithfulness score on a fixed dataset |
 | **M7 — Observability / tracing** | Structured traces of each node, tool call, retrieved chunk, token count, latency | How to see and debug agent runtime behavior and cost | One `/chat` call produces a readable trace of the whole run |
-| **M8 — RAG quality** | Hybrid (BM25 + vector) retrieval and a reranker, measured against M6 | The real retrieval engineering beyond naive top-k | M6 RAG hit-rate measurably improves over the vector-only baseline |
+| **M8 — Retrieval precision: out-of-scope rejection** | A similarity-score threshold on the retriever + an "I don't have that" path when nothing clears it | Retrieval *precision* and confidence gating — knowing when NOT to answer | A negative-eval set of off-topic questions retrieves nothing and the agent declines, while in-scope hit-rate stays put |
 | **M9 — Streaming** | Token-by-token streaming through FastAPI (SSE) → Streamlit | Async streaming patterns used by every production LLM UI | An answer renders incrementally in the Streamlit UI |
 | **M10 — Guardrails** | Input-guard node (prompt-injection) + PII redaction | Input/output safety for a system that can trigger refunds | An injection attempt is flagged; PII is redacted from traces |
 | **M11 — Semantic caching** | Embedding-similarity cache for repeated questions | Embedding reuse for latency and cost reduction | A semantically-similar repeat question is served from cache |
@@ -62,17 +62,31 @@ supervisor decision, logging node name, tool calls, retrieved chunks, token usag
 
 **Touches.** `app/graph.py`, `app/supervisor.py`, new `app/observability/`.
 
-## M8 — RAG quality: hybrid search + reranking
+## M8 — Retrieval precision: out-of-scope rejection
 
-**Concept.** The current retriever is naive vector top-k (`k=3`, `app/rag/retriever.py`) —
-that's the floor. **Hybrid search** (BM25 keyword + vector) and a **reranker** are the two
-highest-impact retrieval upgrades. Chunking-strategy experiments become measurable only now
-that M6 exists.
+**Concept.** The current retriever always returns its top `k` chunks (`k=3`,
+`app/rag/retriever.py`) and `search_kb` always feeds them to the agent — *even for a question
+the KB cannot answer*. Ask "what's the weather in Paris?" and it still returns the 3
+least-irrelevant policy chunks, inviting a confident answer grounded in irrelevant text. That is
+the classic RAG precision failure. The fix is a **relevance threshold**: only keep chunks whose
+similarity score clears a floor, and return *nothing* when none do, so the agent can decline
+instead of inventing.
 
-**First step.** Add BM25 keyword retrieval (`rank_bm25`) alongside the existing Chroma
-retriever, fuse the two result sets, then measure the hit-rate delta with the M6 RAG eval.
+**Why this replaced "hybrid search + reranking."** The original M8 assumed naive vector top-k
+had measurable headroom. On this KB it does not: the M6 retrieval eval scores **100% hit-rate
+even @1** (every gold chunk ranks first), because the corpus is small and each question maps to
+one well-separated section. Hybrid search and reranking improve *ranking among relevant
+candidates* — there is nothing here to re-rank. The real, *measurable* weakness on this corpus is
+precision: the retriever never says "no match." Hybrid + rerank remain worthwhile once the
+corpus grows or exact-code/typo queries appear; they're deferred until the eval shows they'd
+help.
 
-**Touches.** `app/rag/retriever.py`, `pyproject.toml` (rank_bm25), reuses the M6 eval.
+**First step.** Add negative eval cases (off-topic questions whose correct retrieval result is
+*empty*) so the gap is visible and measurable, then switch the retriever to a score-thresholded
+search (`similarity_search_with_relevance_scores`) that drops anything below a tuned floor.
+
+**Touches.** `app/rag/retriever.py`, `app/tools/kb.py`, `app/eval/datasets/retrieval.json` (+ a
+negative set), reuses the M6 eval.
 
 ## M9 — Streaming responses
 
