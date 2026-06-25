@@ -49,6 +49,16 @@ Cover the answer, say yours out loud, reveal. One-liners; deep dives live in
 > Swarm/network (direct hand-offs), hierarchical (supervisors of supervisors), single ReAct
 > agent.
 
+**Q: How do you stop the bot answering off-topic questions?**
+> Add an `out_of_scope` label to the router's `Literal` so "none fit" is a real choice, and
+> route it to a non-LLM node that returns a fixed refusal. Scope at the routing layer = one
+> chokepoint, not N drifting agent prompts.
+
+**Q: Why is the out_of_scope node not an LLM agent?**
+> The model already made the only judgment (in vs out of scope); the refusal text is canned, so
+> zero tokens and zero chance it answers the off-topic question anyway. A node is just
+> `state -> update` — it needn't call a model. Mirror the refusal on bypass paths (streaming).
+
 ---
 
 ## RAG → [03](concepts/03-rag.md)

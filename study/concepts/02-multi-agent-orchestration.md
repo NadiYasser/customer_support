@@ -18,15 +18,17 @@ focused, and easy to reason about; adding a capability is a localized change.
           │ supervisor │
           └─────┬─────┘
    conditional edge reads state["route"]
-        ┌────┬──┴──┬────┬────────┐
-        ▼    ▼     ▼    ▼        ▼
-     faq_rag track refund modify it_support
-        └────┴──┬──┴────┴────────┘
+        ┌────┬──┴──┬────┬────────┬───────────┐
+        ▼    ▼     ▼    ▼        ▼           ▼
+     faq_rag track refund modify it_support out_of_scope
+        └────┴──┬──┴────┴────────┴───────────┘
                 ▼
                END
 ```
 
 Every turn: **classify first (supervisor), then act (one agent), then END.**
+`out_of_scope` is the exception that proves the rule — it's a destination that is
+*not* an LLM agent (see "Scope as a routing decision" below).
 
 ## Why supervisor instead of one mega-agent
 
@@ -57,8 +59,32 @@ graph.add_conditional_edges(
 )
 ```
 
-`Literal["faq_rag", "tracking", "refund", "modify", "it_support"]` in the supervisor and the
-keys of the route map **must agree** — that's the contract that makes routing safe.
+`Literal["faq_rag", "tracking", "refund", "modify", "it_support", "out_of_scope"]` in the
+supervisor and the keys of the route map **must agree** — that's the contract that makes
+routing safe.
+
+## Scope as a routing decision (guardrail)
+
+A forced-choice classifier has a sharp edge: if the only labels are real agents, an
+**off-topic** message ("how to stop prompt injection", "what's 17×23?") still has to go
+*somewhere*. The model picks the least-bad agent, and that agent — a plain LLM — happily
+answers from general knowledge. The support bot ends up writing tutorials.
+
+The fix is to make "none of these fit" a **first-class route**. We added `out_of_scope` to the
+`Literal` and told the supervisor in its prompt not to stretch unrelated questions into a real
+category. Scope is enforced at the **routing layer** (one place) rather than re-litigated inside
+all five agent prompts (five places that can drift).
+
+Two design points worth internalizing:
+
+- **A graph node need not call an LLM.** `out_of_scope` is just `state -> {"messages": [fixed
+  AIMessage]}`. The model already made the only judgment call (in vs. out of scope); the refusal
+  text is canned, so there are zero tokens spent and zero chance the model answers the off-topic
+  question anyway. Deterministic refusal beats asking a model to refuse.
+- **Mirror it on every surface.** The streaming path ([streaming.py](../../app/streaming.py))
+  bypasses the compiled graph, so the fallback node never runs there — it short-circuits on
+  `route == "out_of_scope"` and yields the same shared `OUT_OF_SCOPE_MESSAGE`. A guardrail that
+  only exists on one path isn't a guardrail.
 
 ## Shared state across agents
 
@@ -94,6 +120,12 @@ Network/swarm (agents hand off to each other directly), hierarchical (supervisor
 supervisors), or a single ReAct agent. Supervisor is the simplest that still scales by
 adding leaves.
 
+**Q: How do you stop the bot from answering off-topic questions?**
+Give the router a dedicated `out_of_scope` label so "none of these fit" is a real choice, and
+route it to a non-LLM node that returns a fixed refusal. Enforcing scope at the routing layer
+is one chokepoint; baking refusals into every agent prompt is N places that drift. Mirror the
+refusal on any path that bypasses the graph (e.g. streaming).
+
 ## Gotchas
 
 - **Route map and the `Literal` must stay in sync** — a route the model can emit but the edge
@@ -102,6 +134,9 @@ adding leaves.
   (agent → back to supervisor → another agent) is a different, more complex design.
 - The supervisor sees only the **latest message** for classification here, which is simple but
   can misroute follow-ups that depend on prior context.
+- **A forced-choice router cannot say "no".** Without an `out_of_scope` escape hatch, every
+  message is absorbed by some agent — off-topic questions get answered instead of refused. Add
+  the label *and* mirror the refusal on every surface (graph node + streaming short-circuit).
 
 ## Related
 

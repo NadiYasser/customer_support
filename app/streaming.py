@@ -26,7 +26,7 @@ from collections.abc import Iterator
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from app.graph import support_graph
+from app.graph import support_graph, OUT_OF_SCOPE_MESSAGE
 from app.supervisor import supervisor
 from app.agents.faq_rag import faq_rag_agent
 from app.agents.it_support import it_support_agent
@@ -69,6 +69,17 @@ def stream_answer(thread_id: str, message: str) -> Iterator[str]:
 
     # 1) Route. One quick invoke; the supervisor reads only the latest message.
     route = supervisor({"messages": [human]})["route"]
+
+    # out_of_scope has no agent — the graph handles it with a canned refusal node,
+    # but this path bypasses the graph, so we mirror that refusal here: yield the
+    # fixed message, persist the turn, and stop. No agent, no LLM call.
+    if route == "out_of_scope":
+        yield OUT_OF_SCOPE_MESSAGE
+        support_graph.update_state(
+            config, {"messages": [human, AIMessage(OUT_OF_SCOPE_MESSAGE)]}
+        )
+        return
+
     agent = _AGENTS[route]
 
     # 2) Stream the chosen agent, forwarding only answer-text tokens.

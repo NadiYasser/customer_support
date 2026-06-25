@@ -40,6 +40,7 @@ across worker threads; SqliteSaver serializes its own writes, so this is safe.
 import sqlite3
 from pathlib import Path
 
+from langchain_core.messages import AIMessage
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
@@ -59,6 +60,31 @@ _AGENT_NODES = {
     "it_support": it_support_agent,
 }
 
+# The canned reply for messages the supervisor routes to out_of_scope. Shared with
+# the streaming path (streaming.py) so both surfaces refuse identically.
+OUT_OF_SCOPE_MESSAGE = (
+    "I'm a customer support assistant for this store, so I can only help with "
+    "shopping-related questions. Here's what I can do for you:\n"
+    "  - Track an order (status, ETA, tracking number)\n"
+    "  - Process a refund\n"
+    "  - Cancel or modify an order, or start a return\n"
+    "  - Answer questions about our shipping, returns, and refund policies\n"
+    "  - Open a support ticket for a website/technical problem\n"
+    "What can I help you with?"
+)
+
+
+def out_of_scope(state: SupportState) -> dict:
+    """Fallback node: not an LLM agent, just a fixed refusal.
+
+    A LangGraph node is only `state -> partial update` — it need not call a model.
+    For a refusal we want deterministic, controlled text (no tokens, no chance of
+    the model answering the off-topic question anyway), so this node simply appends
+    one canned AIMessage. The add_messages reducer merges it into the history like
+    any agent reply.
+    """
+    return {"messages": [AIMessage(OUT_OF_SCOPE_MESSAGE)]}
+
 # Where the conversation snapshots live. Absolute path derived from this module's
 # location so the DB is the same file no matter the server's launch directory.
 _DB_PATH = str(Path(__file__).parent / "data" / "checkpoints.sqlite")
@@ -77,16 +103,19 @@ def build_graph():
     graph.add_node("supervisor", supervisor)
     for name, agent in _AGENT_NODES.items():
         graph.add_node(name, agent)
+    graph.add_node("out_of_scope", out_of_scope)
 
     graph.add_edge(START, "supervisor")
-    # Map each route value to its agent node. The keys here MUST match the route
-    # names the supervisor can emit.
+    # Map each route value to its node. The keys here MUST match the route names
+    # the supervisor can emit — including out_of_scope, which maps to the canned
+    # refusal node rather than an LLM agent.
+    _route_targets = list(_AGENT_NODES) + ["out_of_scope"]
     graph.add_conditional_edges(
         "supervisor",
         _pick_route,
-        {name: name for name in _AGENT_NODES},
+        {name: name for name in _route_targets},
     )
-    for name in _AGENT_NODES:
+    for name in _route_targets:
         graph.add_edge(name, END)
 
     # The checkpointer is what turns this from a single-shot graph into a

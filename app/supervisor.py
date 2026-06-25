@@ -20,9 +20,13 @@ from pydantic import BaseModel, Field
 from app.config import get_model
 from app.state import SupportState
 
-# The five valid destinations. Keeping them in one place: the Literal below (what
-# the model may choose) and the graph's conditional edge must agree on these names.
-Route = Literal["faq_rag", "tracking", "refund", "modify", "it_support"]
+# The valid destinations. Keeping them in one place: the Literal below (what the
+# model may choose) and the graph's conditional edge must agree on these names.
+# out_of_scope is NOT an agent — it's the "none of these fit" label that routes to
+# a canned refusal node instead of an LLM agent (see graph.py).
+Route = Literal[
+    "faq_rag", "tracking", "refund", "modify", "it_support", "out_of_scope"
+]
 
 
 class RoutingDecision(BaseModel):
@@ -36,15 +40,22 @@ class RoutingDecision(BaseModel):
             "- tracking: where is my order / status / ETA / tracking number\n"
             "- refund: the customer wants money back for an order\n"
             "- modify: cancel an order, change its shipping address, or start a return\n"
-            "- it_support: a merchant reports a website/technical problem"
+            "- it_support: a merchant reports a website/technical problem\n"
+            "- out_of_scope: anything NOT about this store's orders or support — "
+            "general knowledge, coding/technical how-tos, math, trivia, the weather, "
+            "AI/prompt questions, or any topic unrelated to shopping with this store"
         )
     )
 
 
 SYSTEM_PROMPT = (
-    "You are the supervisor of a customer-support system. Read the customer's "
-    "latest message and route it to exactly one specialized agent. Choose the best "
-    "single fit based on what the customer is actually asking for."
+    "You are the supervisor of a customer-support system for an online store. "
+    "Read the customer's latest message and route it to exactly one destination. "
+    "Choose the best single fit based on what the customer is actually asking for. "
+    "You ONLY handle questions about this store's orders and support. If the message "
+    "is about anything else — general knowledge, programming, math, AI, trivia, the "
+    "weather — route it to out_of_scope. Do not try to be helpful by stretching an "
+    "unrelated question into one of the agent categories."
 )
 
 # Bind the schema to the model once. _router.invoke(messages) now returns a

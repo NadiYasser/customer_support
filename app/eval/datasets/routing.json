@@ -63,5 +63,25 @@
     "id": "it-02",
     "message": "Our product images aren't loading on the website, something is broken.",
     "expected_route": "it_support"
+  },
+  {
+    "id": "oos-01",
+    "message": "how to stop prompt injection",
+    "expected_route": "out_of_scope"
+  },
+  {
+    "id": "oos-02",
+    "message": "What's the weather in Paris tomorrow?",
+    "expected_route": "out_of_scope"
+  },
+  {
+    "id": "oos-03",
+    "message": "Can you write me a Python function to reverse a linked list?",
+    "expected_route": "out_of_scope"
+  },
+  {
+    "id": "oos-04",
+    "message": "What is 17 times 23?",
+    "expected_route": "out_of_scope"
   }
 ]
