@@ -96,6 +96,35 @@ def chat(req: ChatRequest):
     return _format_result(req.thread_id, result, tracer)
 
 
+@app.post("/chat/stream")
+def chat_stream(req: ChatRequest):
+    # Streaming counterpart to /chat (M9). Instead of blocking on invoke() and
+    # returning the whole reply, we stream the answer token-by-token as Server-Sent
+    # Events: the HTTP response stays open and we write one "data:" line per event.
+    #
+    # Wire format (one event per line, blank line terminates each):
+    #   data: {"delta": "Items"}      <- a piece of answer text
+    #   data: {"delta": " purchased"}
+    #   ...
+    #   data: {"done": true}          <- stream finished
+    # JSON-encoding each payload keeps newlines/quotes in the text from breaking
+    # the SSE framing.
+    #
+    # SCOPE: this path streams the normal completion only. HITL refunds still go
+    # through /chat (which surfaces pending_approval) + /resume — an interrupt()
+    # mid-stream needs its own event type, deliberately left out of M9.
+    def event_stream():
+        try:
+            for delta in stream_answer(req.thread_id, req.message):
+                yield f"data: {json.dumps({'delta': delta})}\n\n"
+        except BadRequestError:
+            # Same intermittent Groq tool_use_failed hiccup /chat guards against.
+            yield f"data: {json.dumps({'error': 'hiccup, please retry'})}\n\n"
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 @app.post("/resume")
 def resume(req: ResumeRequest):
     # Continue a graph that paused at interrupt(). Command(resume=value) makes the

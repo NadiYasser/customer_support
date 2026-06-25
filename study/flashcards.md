@@ -205,6 +205,38 @@ Cover the answer, say yours out loud, reveal. One-liners; deep dives live in
 
 ---
 
+## Streaming (SSE) → [09](concepts/09-streaming.md)
+
+**Q: Why stream LLM responses?**
+> Perceived latency — first token in ~ms instead of waiting for the whole answer. Same total
+> time, far better UX.
+
+**Q: SSE vs WebSockets here?**
+> LLM output is one-way server→client = SSE's exact shape (plain HTTP, auto-reconnect).
+> WebSockets are bidirectional and heavier — overkill unless the client streams up too.
+
+**Q: Streamed a multi-node graph but got one chunk, not tokens — why?**
+> A nested runnable (prebuilt agent node) surfaced a completed message at the sub-graph
+> boundary, flattening deltas. Fix: stream the agent that emits tokens, not the outer graph.
+
+**Q: How do you keep routing JSON / tool-call chunks out of the stream?**
+> Filter: forward only non-empty AIMessageChunks that aren't tool-call chunks; run the
+> structured-output router with a blocking invoke, not a stream.
+
+**Q: SSE wire format essentials?**
+> One `data: {json}` line per event + blank line; JSON-encode payloads so newlines don't break
+> framing; always send a terminal `done` event.
+
+**Q: Memory when streaming bypasses the checkpointer?**
+> Load history with get_state before the run, persist the turn with update_state after — or the
+> next message loses context.
+
+**Q: Why doesn't HITL compose with streaming?**
+> An interrupt() (pending refund) is a structured payload, not a token — keep interrupt()-able
+> actions on the blocking /chat path.
+
+---
+
 ## Stack lightning round
 
 **Q: Why LangGraph?**
