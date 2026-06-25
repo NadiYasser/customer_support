@@ -1,0 +1,47 @@
+[
+  {
+    "id": "ship-processing",
+    "question": "How long before my order is processed and shipped out?",
+    "expected_section": "Processing time"
+  },
+  {
+    "id": "ship-delivery",
+    "question": "How many days does delivery usually take once shipped?",
+    "expected_section": "Delivery estimates"
+  },
+  {
+    "id": "ship-costs",
+    "question": "How much do you charge for shipping?",
+    "expected_section": "Shipping costs"
+  },
+  {
+    "id": "ship-tracking",
+    "question": "Will I get a tracking number for my package?",
+    "expected_section": "Tracking"
+  },
+  {
+    "id": "ship-international",
+    "question": "Do you deliver to other countries outside the US?",
+    "expected_section": "International"
+  },
+  {
+    "id": "ret-standard",
+    "question": "How many days do I have to return an item I bought?",
+    "expected_section": "Standard returns"
+  },
+  {
+    "id": "ret-sale",
+    "question": "Can I return something that was on sale or discounted?",
+    "expected_section": "Sale items"
+  },
+  {
+    "id": "ret-refund-method",
+    "question": "How will I receive my money back, and how long does it take?",
+    "expected_section": "How refunds are issued"
+  },
+  {
+    "id": "ret-damaged",
+    "question": "The product arrived broken, what are my options?",
+    "expected_section": "Damaged or defective items"
+  }
+]

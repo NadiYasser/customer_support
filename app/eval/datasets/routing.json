@@ -1,0 +1,67 @@
+[
+  {
+    "id": "track-01",
+    "message": "Where is my order #1003? It still hasn't arrived.",
+    "expected_route": "tracking"
+  },
+  {
+    "id": "track-02",
+    "message": "Can you give me the tracking number for my recent purchase?",
+    "expected_route": "tracking"
+  },
+  {
+    "id": "track-03",
+    "message": "What's the ETA on order 1007?",
+    "expected_route": "tracking"
+  },
+  {
+    "id": "refund-01",
+    "message": "I want a refund for order #1002, the shoes were damaged.",
+    "expected_route": "refund"
+  },
+  {
+    "id": "refund-02",
+    "message": "Please give me my money back for the blender I bought last week.",
+    "expected_route": "refund"
+  },
+  {
+    "id": "faq-01",
+    "message": "How long do I have to return an item?",
+    "expected_route": "faq_rag"
+  },
+  {
+    "id": "faq-02",
+    "message": "What is your refund policy for opened products?",
+    "expected_route": "faq_rag"
+  },
+  {
+    "id": "faq-03",
+    "message": "Do you ship internationally and how much does it cost?",
+    "expected_route": "faq_rag"
+  },
+  {
+    "id": "modify-01",
+    "message": "I need to cancel order #1005 before it ships.",
+    "expected_route": "modify"
+  },
+  {
+    "id": "modify-02",
+    "message": "Can I change the shipping address on my order to a new one?",
+    "expected_route": "modify"
+  },
+  {
+    "id": "modify-03",
+    "message": "I'd like to start a return for the jacket I received.",
+    "expected_route": "modify"
+  },
+  {
+    "id": "it-01",
+    "message": "The checkout page on my store throws a 500 error when customers pay.",
+    "expected_route": "it_support"
+  },
+  {
+    "id": "it-02",
+    "message": "Our product images aren't loading on the website, something is broken.",
+    "expected_route": "it_support"
+  }
+]

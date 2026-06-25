@@ -1,0 +1,30 @@
+[
+  {
+    "id": "faith-returns-window",
+    "question": "How many days do I have to return something?"
+  },
+  {
+    "id": "faith-sale-items",
+    "question": "Can I return an item I bought on sale?"
+  },
+  {
+    "id": "faith-refund-method",
+    "question": "How will my refund be paid back to me?"
+  },
+  {
+    "id": "faith-shipping-cost",
+    "question": "How much does shipping cost?"
+  },
+  {
+    "id": "faith-international",
+    "question": "Do you ship internationally?"
+  },
+  {
+    "id": "faith-damaged",
+    "question": "My order arrived damaged, what should I do?"
+  },
+  {
+    "id": "oos-warranty",
+    "question": "What is the warranty period on electronics, and does it cover accidental damage?"
+  }
+]

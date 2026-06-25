@@ -16,6 +16,8 @@ from langgraph.types import Command
 from pydantic import BaseModel
 
 from app.graph import support_graph
+from app.observability.collector import TraceCollector
+from app.observability.format import format_trace
 
 app = FastAPI(title="AI Customer Support Platform")
 
@@ -35,24 +37,32 @@ class ResumeRequest(BaseModel):
     approved: bool
 
 
-def _format_result(thread_id: str, result: dict) -> dict:
+def _format_result(thread_id: str, result: dict, tracer: TraceCollector) -> dict:
     # One place to turn a graph invoke() result into an HTTP response, shared by
     # /chat and /resume. When the graph paused, the result has an "__interrupt__"
     # key: a tuple of Interrupt objects whose .value is the payload our refund
     # tool passed to interrupt(). In that case there is no final answer yet — we
     # return the proposal and tell the caller approval is pending. Otherwise the
     # last message is the agent's reply.
+    #
+    # The trace (M7) is printed server-side for the operator and echoed in the
+    # response so a client can show what the run did.
+    trace_text = format_trace(tracer)
+    print(trace_text)
+
     interrupts = result.get("__interrupt__")
     if interrupts:
         return {
             "thread_id": thread_id,
             "status": "pending_approval",
             "pending_action": interrupts[0].value,
+            "trace": trace_text,
         }
     return {
         "thread_id": thread_id,
         "status": "completed",
         "reply": result["messages"][-1].content,
+        "trace": trace_text,
     }
 
 
@@ -62,6 +72,10 @@ def chat(req: ChatRequest):
     # load before this turn and save after it. Same thread_id = history
     # accumulates; new thread_id = fresh conversation.
     config = {"configurable": {"thread_id": req.thread_id}}
+    # A fresh collector per request: it subscribes to this run's events via the
+    # callbacks list, so the trace covers exactly this /chat call.
+    tracer = TraceCollector()
+    config["callbacks"] = [tracer]
     try:
         result = support_graph.invoke(
             {"messages": [HumanMessage(req.message)]}, config
@@ -76,7 +90,7 @@ def chat(req: ChatRequest):
             "status": "error",
             "reply": "Sorry, I hit a hiccup processing that. Please try again.",
         }
-    return _format_result(req.thread_id, result)
+    return _format_result(req.thread_id, result, tracer)
 
 
 @app.post("/resume")
@@ -86,7 +100,9 @@ def resume(req: ResumeRequest):
     # all on the SAME thread_id, so the checkpoint with the pending refund is the
     # one we resume. The dict we pass becomes the `decision` the refund tool reads.
     config = {"configurable": {"thread_id": req.thread_id}}
+    tracer = TraceCollector()
+    config["callbacks"] = [tracer]
     result = support_graph.invoke(
         Command(resume={"approved": req.approved}), config
     )
-    return _format_result(req.thread_id, result)
+    return _format_result(req.thread_id, result, tracer)

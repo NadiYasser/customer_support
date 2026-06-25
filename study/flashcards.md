@@ -1,0 +1,194 @@
+# Flashcards — Rapid Interview Drill
+
+Cover the answer, say yours out loud, reveal. One-liners; deep dives live in
+[concepts/](concepts/). Grouped by topic.
+
+---
+
+## Agent loop & tool calling → [01](concepts/01-agent-loop-and-tool-calling.md)
+
+**Q: What is an agent vs a plain LLM call?**
+> An LLM in a loop with tools: it decides to call a tool, you run it, feed the result back,
+> and it loops until it writes a final answer. A plain call is one prompt → one completion.
+
+**Q: What's the ReAct pattern?**
+> Reason + Act: the model alternates reasoning and tool-calling, using each observation to
+> decide the next step.
+
+**Q: How does an LLM "call" a function it can't run?**
+> It emits a structured tool call (name + JSON args). The runtime matches the name, executes
+> the function, appends the result. The model only requests; the harness executes.
+
+**Q: Why does the tool docstring matter?**
+> It's the only thing the model sees about the tool — it's prompt engineering. Vague docstring
+> → wrong tool or bad args.
+
+**Q: When does the loop stop?**
+> When the model returns a normal message with no tool call — that message is the answer.
+
+---
+
+## Multi-agent orchestration → [02](concepts/02-multi-agent-orchestration.md)
+
+**Q: What's the supervisor pattern?**
+> A router node classifies each message and delegates to one specialized sub-agent. Supervisor
+> owns routing; agents own doing.
+
+**Q: Why not one agent with all the tools?**
+> More tools → more wrong picks, longer prompts, harder to evaluate/extend. Specialization
+> keeps each agent reliable and the system modular.
+
+**Q: How does a routing decision become control flow?**
+> Decision → written to graph state → conditional edge reads that field → dispatches to the
+> matching node.
+
+**Q: How do agents share history without clobbering it?**
+> One shared state object whose `messages` field uses an append reducer (`add_messages`).
+
+**Q: Alternatives to supervisor?**
+> Swarm/network (direct hand-offs), hierarchical (supervisors of supervisors), single ReAct
+> agent.
+
+---
+
+## RAG → [03](concepts/03-rag.md)
+
+**Q: What problem does RAG solve?**
+> LLMs don't know your private/current data and hallucinate. RAG injects relevant source text
+> into the prompt → grounded, current, citable answers, no retraining.
+
+**Q: The pipeline in one breath?**
+> Ingest: load → split → embed → store. Query: embed question → top-k similarity search →
+> stuff chunks in prompt → answer from them.
+
+**Q: Why same embedding model at ingest and query?**
+> Vectors are only comparable within one model's vector space. Mismatch → wrong chunks.
+
+**Q: RAG's two independent failure modes?**
+> Retrieval (wrong/missing chunks) and generation (hallucinated answer despite good chunks).
+> Measure separately.
+
+**Q: How to reduce hallucination in RAG?**
+> Return raw chunks, prompt to answer only from them + admit gaps, keep provenance, eval
+> faithfulness with an LLM judge.
+
+**Q: Improve retrieval beyond plain vector search?**
+> Hybrid (vector + keyword/BM25), re-ranking, better chunking, query rewriting, metadata
+> filters.
+
+---
+
+## State & memory → [04](concepts/04-state-and-memory.md)
+
+**Q: LLMs are stateless — how do chatbots remember?**
+> Persist the conversation outside the model and replay it: state object + checkpointer keyed
+> by `thread_id`; each turn restores then appends.
+
+**Q: What's a reducer?**
+> A merge function for a state field. `add_messages` appends instead of overwriting → history
+> accumulates.
+
+**Q: MemorySaver vs SqliteSaver?**
+> In-process dict (lost on restart) vs file-backed (survives restart, needs a managed
+> connection). Same interface.
+
+**Q: What does thread_id do?**
+> Conversation key the checkpointer uses to load/save the right snapshot. Same id = continue;
+> new id = fresh.
+
+**Q: persistence + reducer = ?**
+> Multi-turn memory. Neither alone is enough.
+
+---
+
+## Human-in-the-loop → [05](concepts/05-human-in-the-loop.md)
+
+**Q: What is HITL, when do you use it?**
+> A pause where a human approves before a consequential action (refunds, irreversible writes).
+> Use it where an agent mistake is expensive/hard to undo.
+
+**Q: How is the pause implemented?**
+> `interrupt()` checkpoints state and returns control to the caller. `Command(resume=value)`
+> replays from the checkpoint, making interrupt() return that value.
+
+**Q: Why must resume use the same thread_id?**
+> The pending state lives in the checkpoint keyed by thread_id; resuming elsewhere loads the
+> wrong snapshot.
+
+**Q: Node mutates a DB, gets interrupted, resumes — double-write risk?**
+> Only if the write is *before* the interrupt (the node replays from its start on resume). Put
+> side effects *after* the interrupt → exactly once.
+
+**Q: Why build memory before HITL?**
+> Both use the same checkpointer; the interrupt is just "pause at a saved state and resume."
+
+---
+
+## Structured output → [06](concepts/06-structured-output.md)
+
+**Q: What is it and why?**
+> Force the model to return data matching a schema instead of prose. Use whenever a downstream
+> system consumes the output — no brittle text parsing, validation for free.
+
+**Q: How is it enforced?**
+> Tool/function calling (schema = function signature) or provider-native constrained decoding
+> (`json_schema`/JSON mode). Framework validates + retries.
+
+**Q: tool-calling vs json_schema — when switch?**
+> Default tool calling; switch to json_schema when tool-call serialization is flaky (e.g. Groq
+> `tool_use_failed`) or you only need data, not an action.
+
+**Q: How does it make routing reliable?**
+> Constrain to a `Literal` label set → model can only return a dispatchable route, no free text
+> to parse.
+
+---
+
+## Evaluation → [07](concepts/07-evaluation.md)
+
+**Q: How do you evaluate an agent system?**
+> Decompose and measure each stage: exact-match where ground truth exists (routing, retrieval),
+> LLM-judge/human for open-ended generation. Track metrics to catch regressions.
+
+**Q: What is LLM-as-judge, when appropriate?**
+> A model scores another's output against a rubric. For free-form outputs (faithfulness, tone).
+> Make reliable with a narrow rubric + structured verdict.
+
+**Q: Measure RAG's two halves?**
+> Retrieval = hit-rate@k (gold chunk in top-k?); generation = faithfulness (every claim
+> supported by chunks?).
+
+**Q: Why paraphrase eval questions?**
+> Copied text tests keyword overlap; paraphrases test real semantic matching.
+
+**Q: Why assert accuracy ≥ 0.8 in a test?**
+> Regression floor — CI fails if a change drops below known-good. Raise it as the system
+> improves; it's not the ceiling.
+
+**Q: Faithfulness vs helpfulness?**
+> "I don't have that info" is faithful (invents nothing) but unhelpful. Judging grounding only
+> is what makes the judge reliable.
+
+---
+
+## Stack lightning round
+
+**Q: Why LangGraph?**
+> Models agents as an explicit graph of nodes + state — control flow is visible, not hidden
+> behind framework magic.
+
+**Q: Why a tool-calling model specifically (Groq `openai/gpt-oss-120b`)?**
+> The whole design depends on tool use; this model serializes tool calls reliably.
+> `llama-3.3-70b` intermittently emits malformed tool calls (`400 tool_use_failed`).
+
+**Q: Why `temperature=0`?**
+> Routing/tool decisions should be predictable, not creative.
+
+**Q: Why Chroma?**
+> Local, in-process vector store — easy to inspect what got stored/retrieved while learning.
+
+**Q: One-sentence system description?**
+> A supervisor routes each support message (structured output) to one of five specialized
+> agents; each runs an agent loop over its tools; the FAQ agent does RAG; the refund agent has
+> an interrupt() HITL gate; all stateful via a SQLite checkpointer keyed by thread_id; each
+> layer independently evaluated.
