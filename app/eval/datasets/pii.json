@@ -1,0 +1,10 @@
+[
+  {"id": "pii-email", "raw": "Contact me at amine.b@example.com about my order", "expected": "Contact me at [EMAIL] about my order"},
+  {"id": "pii-card-spaced", "raw": "My card is 4111 1111 1111 1111 please charge it", "expected": "My card is [CARD] please charge it"},
+  {"id": "pii-card-hyphen", "raw": "card 4111-1111-1111-1111 on file", "expected": "card [CARD] on file"},
+  {"id": "pii-phone-intl", "raw": "Call me on +212 612-345-678 tomorrow", "expected": "Call me on [PHONE] tomorrow"},
+  {"id": "pii-multi", "raw": "email a@b.co and phone +10612345678", "expected": "email [EMAIL] and phone [PHONE]"},
+  {"id": "keep-date", "raw": "Order 1001 shipped, ETA 2026-06-22, tracking TRK-1001-XY", "expected": "Order 1001 shipped, ETA 2026-06-22, tracking TRK-1001-XY"},
+  {"id": "keep-price", "raw": "total 64.99 status shipped", "expected": "total 64.99 status shipped"},
+  {"id": "keep-order-id", "raw": "refund processed for order 1003", "expected": "refund processed for order 1003"}
+]

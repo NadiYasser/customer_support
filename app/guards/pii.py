@@ -26,14 +26,29 @@ import re
 # their span is already replaced by the time the phone/card patterns run.
 _EMAIL = re.compile(r"\b[\w.%+-]+@[\w.-]+\.[A-Za-z]{2,}\b")
 
-# Card-like: 13–16 digits, optionally split by spaces or hyphens in groups of four
-# (e.g. 4111 1111 1111 1111 or 4111-1111-1111-1111 or the bare run). Checked before
-# the looser phone pattern so a full card number isn't partially eaten as a phone.
-_CARD = re.compile(r"\b(?:\d[ -]?){13,16}\b")
+# Card-like: 13–16 digits, optionally split by single spaces/hyphens. Anchored on a
+# digit at BOTH ends so it can't swallow a trailing separator or the space before
+# the next word. Checked before the looser phone pattern so a full card number
+# isn't partially eaten as a phone.
+_CARD = re.compile(r"\b\d(?:[ -]?\d){12,15}\b")
 
-# Phone: an optional +country code then 7+ digits with common separators. Loose on
-# purpose — over-redacting a number in a trace is the safe direction.
+# Phone candidate: an optional +country code then digits with common separators.
+# This shape ALSO matches things like an ISO date (2026-06-22), so the replacement
+# gates each candidate on digit count (see _sub_phone) to avoid redacting dates.
 _PHONE = re.compile(r"\+?\d[\d\s().-]{6,}\d")
+
+
+def _sub_phone(match: re.Match) -> str:
+    # Only treat a candidate as a phone if it has a leading + (explicit country
+    # code) or at least 9 digits. An ISO date like 2026-06-22 has 8 digits and no
+    # +, so it's left intact — redacting trace dates as [PHONE] would be both wrong
+    # and unhelpful to an operator. Tradeoff: a bare 7–8 digit local number slips
+    # through; over/under-redaction here is the classic precision/recall dial.
+    span = match.group(0)
+    digits = sum(c.isdigit() for c in span)
+    if span.lstrip().startswith("+") or digits >= 9:
+        return "[PHONE]"
+    return span
 
 
 def redact_pii(text: str) -> str:
@@ -46,5 +61,5 @@ def redact_pii(text: str) -> str:
         return text
     text = _EMAIL.sub("[EMAIL]", text)
     text = _CARD.sub("[CARD]", text)
-    text = _PHONE.sub("[PHONE]", text)
+    text = _PHONE.sub(_sub_phone, text)
     return text

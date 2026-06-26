@@ -11,8 +11,8 @@ questions and answers.
 - **Want to actually understand a mechanism?** Read the matching `concepts/` page. Each
   links to the real file in this repo (`Where it lives in this codebase`) so you can read
   the implementation right after the theory.
-- **Reviewing the whole system?** Read the concept pages in order 01 → 09; they follow the
-  build roadmap (M1 → M9) and each builds on the last.
+- **Reviewing the whole system?** Read the concept pages in order 01 → 10; they follow the
+  build roadmap (M1 → M10) and each builds on the last.
 
 ## Concept index
 
@@ -27,15 +27,19 @@ questions and answers.
 | 07 | [Evaluation](concepts/07-evaluation.md) | Measure routing accuracy, retrieval hit-rate, faithfulness (LLM-judge) | M6 |
 | 08 | [Retrieval precision & out-of-scope rejection](concepts/08-retrieval-precision.md) | Score-threshold retrieval → decline when nothing is relevant | M8 |
 | 09 | [Streaming responses (SSE)](concepts/09-streaming.md) | Stream answer tokens over Server-Sent Events; render incrementally | M9 |
+| 10 | [Guardrails (input safety & PII redaction)](concepts/10-guardrails.md) | Regex injection guard before the LLM + PII scrub on traces | M10 |
 
 ## The system in one paragraph
 
-A customer message hits `POST /chat`. A **supervisor** classifies it (structured output)
-and routes to one of five **specialized agents**. Each agent runs an **agent loop** — calls
+A customer message hits `POST /chat`. An **input guard** runs first — a deterministic
+regex check that blocks prompt-injection attempts before any LLM sees the message. A
+**supervisor** then classifies it (structured output) and routes to one of five
+**specialized agents**. Each agent runs an **agent loop** — calls
 its tools, feeds results back, writes a grounded answer. The FAQ agent's tool does **RAG**
 (retrieve KB chunks from Chroma, answer only from them). The refund agent's tool has a
 **human-in-the-loop** gate: large refunds `interrupt()` the graph and wait for `/resume`.
 All of this is **stateful** — a SQLite checkpointer keyed by `thread_id` gives multi-turn
 memory and is also what makes resume-after-interrupt work. The FAQ agent gates retrieval on a
 **relevance threshold**, so out-of-scope questions get a polite decline instead of an answer
-grounded on irrelevant chunks. **Evaluation** measures each layer independently.
+grounded on irrelevant chunks. **Evaluation** measures each layer independently, and
+**observability traces** record every run — with **PII redacted** before they're logged.

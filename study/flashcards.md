@@ -247,6 +247,42 @@ Cover the answer, say yours out loud, reveal. One-liners; deep dives live in
 
 ---
 
+## Guardrails → [10](concepts/10-guardrails.md)
+
+**Q: Where does the input guard sit, and why there?**
+> In front of the supervisor, before any LLM or tool. The agents are what can move money; a
+> flagged message must be stopped before it reaches them.
+
+**Q: Why regex, not an LLM, for the injection guard?**
+> Independence. Defending an LLM with another LLM that reads the same untrusted text just moves
+> the attack surface. Regex is deterministic and can't be argued out of its verdict. Tradeoff:
+> brittle to novel phrasings → layered (regex + LLM classifier) in production.
+
+**Q: How does the guard's decision become control flow?**
+> The node sets blocked=True + appends a refusal; a conditional edge reads blocked → END, else →
+> supervisor. Same decision→edge trick as routing.
+
+**Q: How do you keep a guard from blocking real customers?**
+> Match the injection *structure* (re-instructing the model), not topic words; then measure the
+> false-positive rate on benign traffic, including legit trigger words ("ignore the shipping fee").
+
+**Q: Where does PII leak, and where do you redact it?**
+> In traces of tool outputs (names, addresses) that get logged and returned. Redact at the one
+> place tool output becomes text (format_trace), replacing email/phone/card with typed placeholders.
+
+**Q: Why typed placeholders ([EMAIL]) instead of blanking?**
+> An operator can still see a value was there and what kind — debuggable without exposing it.
+
+**Q: Why not redact names with regex?**
+> Names have no fixed shape — regex misses most or destroys ordinary words. Needs an NER model
+> (Presidio/spaCy). Regex only fits *structured* PII (email/phone/card).
+
+**Q: A graph safety node and a bypass path — what's the trap?**
+> The streaming path bypasses the graph, so it skips the guard node. Re-apply the check by hand on
+> any bypass path, or the bypass is a hole (same gotcha as off-graph memory).
+
+---
+
 ## Stack lightning round
 
 **Q: Why LangGraph?**
@@ -264,7 +300,8 @@ Cover the answer, say yours out loud, reveal. One-liners; deep dives live in
 > Local, in-process vector store — easy to inspect what got stored/retrieved while learning.
 
 **Q: One-sentence system description?**
-> A supervisor routes each support message (structured output) to one of five specialized
-> agents; each runs an agent loop over its tools; the FAQ agent does RAG; the refund agent has
-> an interrupt() HITL gate; all stateful via a SQLite checkpointer keyed by thread_id; each
-> layer independently evaluated.
+> An input guard blocks prompt injection before anything else; a supervisor then routes each
+> support message (structured output) to one of five specialized agents; each runs an agent loop
+> over its tools; the FAQ agent does RAG; the refund agent has an interrupt() HITL gate; all
+> stateful via a SQLite checkpointer keyed by thread_id; every run is traced with PII redacted;
+> each layer independently evaluated.
