@@ -28,6 +28,7 @@ questions and answers.
 | 08 | [Retrieval precision & out-of-scope rejection](concepts/08-retrieval-precision.md) | Score-threshold retrieval → decline when nothing is relevant | M8 |
 | 09 | [Streaming responses (SSE)](concepts/09-streaming.md) | Stream answer tokens over Server-Sent Events; render incrementally | M9 |
 | 10 | [Guardrails (input safety & PII redaction)](concepts/10-guardrails.md) | Regex injection guard before the LLM + PII scrub on traces | M10 |
+| 11 | _MCP (Model Context Protocol)_ — **upcoming** | Decouple tools from the agent: a server exposes tools, the agent is a client that discovers/calls them over a transport | M12 |
 
 ## The system in one paragraph
 

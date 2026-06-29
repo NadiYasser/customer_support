@@ -163,6 +163,11 @@ We build one mechanism at a time so each is understood before the next is added.
 > milestone lands on infrastructure that already exists, instead of introducing the
 > checkpointer as a side effect of the approval gate.
 
+> **Beyond M5.** A second roadmap in `IMPROVEMENTS.md` (M6–M12) turns this working demo
+> into an AI-engineering practice vehicle: evaluation, observability, retrieval precision,
+> streaming, guardrails, semantic caching, and **MCP** (M12 — moving the IT-support agent's
+> tool out of process into a mock ticketing **MCP server** the agent connects to as a client).
+
 ## 8. Out of scope (for now)
 
 - Real e-commerce / ticketing integrations (interfaces are swappable so this is additive).

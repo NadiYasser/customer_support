@@ -29,6 +29,7 @@ it actually helped.
 | **M9 — Streaming** | Token-by-token streaming through FastAPI (SSE) → Streamlit | Async streaming patterns used by every production LLM UI | An answer renders incrementally in the Streamlit UI |
 | **M10 — Guardrails** | Input-guard node (prompt-injection) + PII redaction | Input/output safety for a system that can trigger refunds | An injection attempt is flagged; PII is redacted from traces |
 | **M11 — Semantic caching** | Embedding-similarity cache for repeated questions | Embedding reuse for latency and cost reduction | A semantically-similar repeat question is served from cache |
+| **M12 — MCP (Model Context Protocol)** | Move the IT-support agent's tool out of process into a mock ticketing **MCP server**; the agent becomes an **MCP client** that discovers/calls it over a transport | How tools are decoupled from the agent — the protocol behind Claude Desktop / Cursor plugins | The IT agent opens a ticket by calling a tool it loaded from a separate MCP server process, not an in-process import |
 
 ---
 
@@ -134,6 +135,51 @@ latency and LLM cost. Teaches embedding-similarity reuse.
 `get_embeddings()` from `app/config.py`.
 
 **Touches.** `app/agents/faq_rag.py` (or a pre-node), reuses `app/config.py`.
+
+## M12 — MCP (Model Context Protocol)
+
+**Concept.** Every tool in this project is an **in-process Python function**: `create_ticket`
+is a `@tool` in `app/tools/it_support.py` that `app/agents/it_support.py` imports directly. The
+agent and its tools live in the same process and ship together. **MCP** breaks that coupling. It
+is an open protocol (the same one Claude Desktop and Cursor use to plug in external tools) where
+a standalone **MCP server** *exposes* tools and an agent acts as an **MCP client** that
+*discovers* those tools at runtime and *calls* them over a transport. The tool's code no longer
+has to live inside the agent — or even be written in the same language, or run on the same
+machine. This is the mechanism behind "give your agent access to GitHub / a database / Slack"
+without hard-wiring each integration into the agent itself.
+
+**Why this is the right next concept here.** The whole project has treated tools as thin
+wrappers over swappable repositories — the IT-support tool is *already* documented as "swappable
+for a real Jira/Zendesk/Linear client." MCP is what that swap actually looks like in practice:
+the ticketing system becomes a separate server speaking a standard protocol, and the agent
+discovers its tools instead of importing them. Converting one agent makes the client/server split
+visible without disturbing the refund/HITL machinery or the supervisor.
+
+**Scope: the IT-support agent only.** We convert exactly one agent — IT support — to load
+`create_ticket` from a mock ticketing MCP server. It's the cleanest candidate: single tool,
+write-only, no RAG, no `interrupt()` gate, and its tool already sits behind `TicketRepository`.
+The other four agents keep importing their tools in-process, so the codebase shows **both**
+patterns side by side — the contrast *is* the lesson. (Generalizing the pattern to the remaining
+agents is a deliberate follow-on, not part of M12.)
+
+**Decision at build time.** Transport — **stdio** (agent spawns the server as a local
+subprocess, talks over stdin/stdout; the simplest local default) vs **streamable HTTP** (server
+runs as a network service). We'll likely teach **stdio first** because it shows the client/server
+split with no networking to manage, and weigh adding HTTP as a follow-on once the protocol is
+understood. Also at build time: which client library wires LangGraph to MCP
+(`langchain-mcp-adapters` exposes MCP tools as LangChain tools the existing `create_agent` loop
+can consume unchanged) — chosen then so the mechanics stay visible.
+
+**First step.** Stand up a minimal ticketing MCP server (a separate process, e.g.
+`app/mcp/ticket_server.py`) that exposes a single `create_ticket` tool backed by the existing
+`TicketRepository`, then point a tiny MCP client at it and confirm the tool is *discovered* (its
+name + schema come back over the protocol) before wiring it into the agent. Seeing discovery work
+in isolation is the "aha" — the agent gets its tool from a handshake, not an `import`.
+
+**Touches.** new `app/mcp/` (server + client glue), `app/agents/it_support.py` (load the tool
+from MCP instead of importing `create_ticket`), `pyproject.toml` (MCP SDK +
+`langchain-mcp-adapters`), reuses `app/repositories/tickets.py`. Study notes: a new
+`study/concepts/11-mcp.md` + flashcards, registered in `study/README.md`.
 
 ---
 
