@@ -48,7 +48,7 @@ from langchain_core.messages import AIMessage
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
-from app.agents.faq_rag import faq_rag_agent
+from app.agents.faq_rag import faq_rag_node
 from app.agents.it_support import it_support_agent
 from app.agents.modify import modify_agent
 from app.agents.refund import refund_agent
@@ -89,7 +89,7 @@ def input_guard(state: SupportState) -> dict:
     return {"blocked": False}
 
 _AGENT_NODES = {
-    "faq_rag": faq_rag_agent,
+    "faq_rag": faq_rag_node,
     "tracking": tracking_agent,
     "refund": refund_agent,
     "modify": modify_agent,

@@ -27,6 +27,7 @@ from collections.abc import Iterator
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.graph import support_graph, OUT_OF_SCOPE_MESSAGE, BLOCKED_MESSAGE
+from app.cache.semantic_cache import faq_cache
 from app.guards.injection import detect_injection
 from app.supervisor import supervisor
 from app.agents.faq_rag import faq_rag_agent
@@ -94,6 +95,18 @@ def stream_answer(thread_id: str, message: str) -> Iterator[str]:
 
     agent = _AGENTS[route]
 
+    # M11 semantic cache, same as the graph's faq_rag_node — this path bypasses the
+    # graph, so we mirror the cache here too (as we do for the guard and out_of_scope
+    # above). On a hit we yield the stored answer in ONE piece: it's already known,
+    # so there are no real tokens to stream. On a miss we fall through to the live
+    # agent stream and store its answer below.
+    if route == "faq_rag":
+        cached = faq_cache.get(message)
+        if cached is not None:
+            yield cached
+            support_graph.update_state(config, {"messages": [human, AIMessage(cached)]})
+            return
+
     # 2) Stream the chosen agent, forwarding only answer-text tokens.
     pieces: list[str] = []
     for chunk, meta in agent.stream(agent_input, stream_mode="messages"):
@@ -106,4 +119,6 @@ def stream_answer(thread_id: str, message: str) -> Iterator[str]:
 
     # 3) Persist the turn (human + final answer) so memory survives to next turn.
     answer = "".join(pieces)
+    if route == "faq_rag":
+        faq_cache.put(message, answer)
     support_graph.update_state(config, {"messages": [human, AIMessage(answer)]})

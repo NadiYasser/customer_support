@@ -283,6 +283,81 @@ Cover the answer, say yours out loud, reveal. One-liners; deep dives live in
 
 ---
 
+## Semantic caching → [11](concepts/11-semantic-caching.md)
+
+**Q: What is a semantic cache?**
+> A cache keyed on embedding similarity instead of exact string. Embed the question, match by
+> cosine similarity against answered ones; reuse the answer if the nearest clears a threshold.
+
+**Q: Why not a plain dict cache for questions?**
+> Natural-language paraphrases never match an exact key. Keying on the embedding turns "same
+> meaning, different words" into "nearby vectors" — which is what hits.
+
+**Q: Where does the cache check go, and why there?**
+> BEFORE retrieval and the LLM. The whole win is skipping the expensive path; checking after it
+> would save nothing. Miss → run the agent and store its answer for next time.
+
+**Q: What's safe to cache, and what isn't?**
+> Cache only deterministic, side-effect-free answers — FAQ/policy (static text). Not tracking
+> (live per-customer state), not refund/modify (they mutate the store; a hit skips a real action).
+
+**Q: How do you set the similarity threshold?**
+> Measure paraphrases (should-hit) vs different topics (should-miss), put it in the gap. Here:
+> hits ≥ 0.726, misses ≤ 0.674 → threshold 0.70.
+
+**Q: Why would a "0.9 = very similar" guess break the cache?**
+> Gemini embeddings sit in a narrow band — even unrelated questions score ~0.6, paraphrases only
+> ~0.73. A 0.9 floor never fires. The usable band depends on the embedding model; always measure.
+
+**Q: Which direction is the dangerous threshold error?**
+> Too LOW → false hit → serving a wrong answer confidently (e.g. return policy for a shipping
+> question). Worse than a miss. Bias slightly high.
+
+**Q: Why cosine, not dot product?**
+> Gemini embeddings aren't unit-normalized; a dot product mixes in vector length. Cosine divides
+> by both norms, comparing pure direction = meaning.
+
+**Q: Cache + streaming — the trap?**
+> Streaming bypasses the graph, so the cache must be mirrored in stream_answer (same as the
+> guard). On a hit, yield the stored answer in one piece — there are no real tokens to stream.
+
+---
+
+## Channel adapters & async HITL → [13](concepts/13-channel-adapters-async-hitl.md)
+
+**Q: What is a channel adapter?**
+> A thin boundary layer translating one transport (WhatsApp) into the graph's neutral
+> `thread_id + message → reply` shape and back. The graph stays transport-agnostic; dependency
+> points one way (channel → core).
+
+**Q: What does the adapter do, concretely?**
+> Three functions: verify the webhook handshake, parse Meta's nested inbound JSON into
+> (phone, text), and send_text replies via the Graph API (mock-logs when no credentials).
+
+**Q: How does a phone become a conversation?**
+> thread_id = "wa:{phone}". Memory is just the checkpointer keyed by thread_id, so WhatsApp
+> history persists with no new memory code. The "wa:" prefix lets /resume push outbound.
+
+**Q: Why does WhatsApp change the HITL design?**
+> It's async. The webhook returns immediately and the reply goes out later; the approver
+> (admin) is a different process than the requester (customer). The proposal can't ride a
+> request/response cycle — it needs an out-of-band pending store the approver polls.
+
+**Q: Checkpointer already persists the paused graph — why a pending store too?**
+> The checkpointer can resume a known thread_id but gives no queryable list of which threads
+> await a human. The pending store is that index (thread_id → proposal) so a separate process
+> can discover approvals.
+
+**Q: Why must the webhook never 500 on a bad body?**
+> Meta retries non-2xx deliveries, which would re-run the graph. The adapter returns None for
+> anything it can't handle; the webhook answers 200 "ignored".
+
+**Q: Should the customer approve their own refund over WhatsApp?**
+> No — that collapses the HITL model. The customer only gets "under review"; an independent
+> admin approves on the dashboard.
+
+---
+
 ## Stack lightning round
 
 **Q: Why LangGraph?**

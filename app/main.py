@@ -9,20 +9,50 @@ call interrupt(), which PAUSES the graph mid-run: invoke() returns early with an
 via Command(resume=...). Below-threshold refunds and all other turns finish in
 one shot, exactly as before.
 """
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import HTMLResponse, StreamingResponse
 from groq import BadRequestError
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 from pydantic import BaseModel
 import json
 
+from app.channels import pending, whatsapp
 from app.graph import support_graph
 from app.observability.collector import TraceCollector
 from app.observability.format import format_trace
 from app.streaming import stream_answer
 
+# Sent to a WhatsApp customer when their refund hits the approval gate. They get
+# this immediately (the webhook can't hold the line); an admin approves later on
+# the dashboard and the outcome is pushed back as a separate message.
+REVIEW_MESSAGE = (
+    "Thanks — your refund request has been received and is under review by our "
+    "team. We'll message you here as soon as it's been processed."
+)
+
 app = FastAPI(title="AI Customer Support Platform")
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy():
+    # Meta requires a reachable Privacy Policy URL before an app can go Live. This
+    # is a learning project with no real users or data collection, so this page
+    # just states that plainly. Served by our own app over the ngrok tunnel, so no
+    # external host is needed: the URL is https://<ngrok-domain>/privacy.
+    return """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Privacy Policy</title></head>
+<body style="font-family: system-ui; max-width: 640px; margin: 40px auto; line-height: 1.6">
+<h1>Privacy Policy</h1>
+<p>This application is a personal, educational project used to learn how to build
+AI customer-support agents. It is not a commercial product.</p>
+<p>It does not collect, store, sell, or share personal data for any purpose beyond
+processing a message during a live test conversation. Messages sent to the test
+WhatsApp number are used only to generate an immediate automated reply and are not
+retained for marketing or shared with third parties.</p>
+<p>For any question about this test project, contact the developer who shared this
+number with you.</p>
+</body></html>"""
 
 
 @app.get("/health")
@@ -137,4 +167,73 @@ def resume(req: ResumeRequest):
     result = support_graph.invoke(
         Command(resume={"approved": req.approved}), config
     )
+    # If this thread came in over WhatsApp, the human just decided here on the
+    # dashboard — but the customer is on WhatsApp, not watching this response. Push
+    # the outcome back out as an outbound message, and clear the pending entry so
+    # it leaves the dashboard's approval queue.
+    if req.thread_id.startswith(whatsapp.THREAD_PREFIX):
+        pending.remove(req.thread_id)
+        if result.get("messages"):
+            phone = req.thread_id[len(whatsapp.THREAD_PREFIX):]
+            whatsapp.send_text(phone, result["messages"][-1].content)
     return _format_result(req.thread_id, result, tracer)
+
+
+@app.get("/pending")
+def pending_approvals():
+    # The dashboard polls this to discover threads paused at the HITL gate. With
+    # synchronous /chat the caller already holds the pending_action; async channels
+    # have no such caller, so the pending store (app/channels/pending.py) is the
+    # out-of-band place the proposal waits to be picked up.
+    return {"pending": pending.list_all()}
+
+
+@app.get("/webhook/whatsapp")
+def whatsapp_verify(request: Request):
+    # Meta's one-time verification handshake. It GETs with hub.* query params; we
+    # echo hub.challenge back as PLAIN TEXT only if the verify token matches the
+    # secret we configured. The adapter owns the token check; we just translate the
+    # result into HTTP (200 + challenge, or 403).
+    params = request.query_params
+    challenge = whatsapp.verify_webhook(
+        params.get("hub.mode"),
+        params.get("hub.verify_token"),
+        params.get("hub.challenge"),
+    )
+    if challenge is None:
+        return Response(status_code=403)
+    return Response(content=challenge, media_type="text/plain")
+
+
+@app.post("/webhook/whatsapp")
+async def whatsapp_inbound(request: Request):
+    # Inbound message callback. Meta expects a FAST 200 and closes the connection,
+    # so the reply goes back out-of-band via the adapter's send_text — this is the
+    # async nature that reshapes the HITL flow below.
+    body = await request.json()
+    parsed = whatsapp.parse_inbound(body)
+    if parsed is None:
+        # Status/read receipt or a non-text message — nothing to answer, but we
+        # MUST still 200 or Meta will retry the delivery.
+        return {"status": "ignored"}
+
+    phone, text = parsed
+    thread_id = whatsapp.thread_id_for(phone)
+    config = {"configurable": {"thread_id": thread_id}}
+    try:
+        result = support_graph.invoke({"messages": [HumanMessage(text)]}, config)
+    except BadRequestError:
+        whatsapp.send_text(phone, "Sorry, I hit a hiccup processing that. Please try again.")
+        return {"status": "error"}
+
+    interrupts = result.get("__interrupt__")
+    if interrupts:
+        # The refund gate fired. There's no caller to show the proposal to, so:
+        # park it in the pending store for an admin, and tell the customer it's
+        # under review. The graph stays checkpointed at the interrupt until /resume.
+        pending.add(thread_id, interrupts[0].value)
+        whatsapp.send_text(phone, REVIEW_MESSAGE)
+        return {"status": "pending_approval"}
+
+    whatsapp.send_text(phone, result["messages"][-1].content)
+    return {"status": "completed"}

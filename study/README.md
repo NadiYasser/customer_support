@@ -11,8 +11,8 @@ questions and answers.
 - **Want to actually understand a mechanism?** Read the matching `concepts/` page. Each
   links to the real file in this repo (`Where it lives in this codebase`) so you can read
   the implementation right after the theory.
-- **Reviewing the whole system?** Read the concept pages in order 01 → 10; they follow the
-  build roadmap (M1 → M10) and each builds on the last.
+- **Reviewing the whole system?** Read the concept pages in order 01 → 11; they follow the
+  build roadmap (M1 → M11) and each builds on the last.
 
 ## Concept index
 
@@ -28,7 +28,9 @@ questions and answers.
 | 08 | [Retrieval precision & out-of-scope rejection](concepts/08-retrieval-precision.md) | Score-threshold retrieval → decline when nothing is relevant | M8 |
 | 09 | [Streaming responses (SSE)](concepts/09-streaming.md) | Stream answer tokens over Server-Sent Events; render incrementally | M9 |
 | 10 | [Guardrails (input safety & PII redaction)](concepts/10-guardrails.md) | Regex injection guard before the LLM + PII scrub on traces | M10 |
-| 11 | _MCP (Model Context Protocol)_ — **upcoming** | Decouple tools from the agent: a server exposes tools, the agent is a client that discovers/calls them over a transport | M12 |
+| 11 | [Semantic caching](concepts/11-semantic-caching.md) | Embed the question → reuse a cached answer when a near-duplicate is asked | M11 |
+| 12 | _MCP (Model Context Protocol)_ — **upcoming** | Decouple tools from the agent: a server exposes tools, the agent is a client that discovers/calls them over a transport | M12 |
+| 13 | [Channel adapters & async HITL](concepts/13-channel-adapters-async-hitl.md) | WhatsApp as a swappable transport; async approval via a pending store the dashboard polls | M13 |
 
 ## The system in one paragraph
 
@@ -42,5 +44,7 @@ its tools, feeds results back, writes a grounded answer. The FAQ agent's tool do
 All of this is **stateful** — a SQLite checkpointer keyed by `thread_id` gives multi-turn
 memory and is also what makes resume-after-interrupt work. The FAQ agent gates retrieval on a
 **relevance threshold**, so out-of-scope questions get a polite decline instead of an answer
-grounded on irrelevant chunks. **Evaluation** measures each layer independently, and
-**observability traces** record every run — with **PII redacted** before they're logged.
+grounded on irrelevant chunks. A **semantic cache** sits in front of the FAQ agent — a
+near-duplicate question is served a stored answer by embedding similarity, skipping retrieval
+and the LLM. **Evaluation** measures each layer independently, and **observability traces**
+record every run — with **PII redacted** before they're logged.

@@ -1,0 +1,39 @@
+[
+  {
+    "id": "return-policy",
+    "seed": "what is your return policy?",
+    "should_hit": [
+      "what's the return policy?",
+      "can i return an item?",
+      "how do returns work?"
+    ],
+    "should_miss": [
+      "how long does shipping take?",
+      "when will i get my refund?"
+    ]
+  },
+  {
+    "id": "shipping-time",
+    "seed": "how long does shipping take?",
+    "should_hit": [
+      "how many days for delivery?",
+      "when will my order arrive?"
+    ],
+    "should_miss": [
+      "what is your return policy?",
+      "when will i get my refund?"
+    ]
+  },
+  {
+    "id": "refund-timing",
+    "seed": "when will i get my refund?",
+    "should_hit": [
+      "how long do refunds take?",
+      "time to receive my money back?"
+    ],
+    "should_miss": [
+      "what is your return policy?",
+      "how long does shipping take?"
+    ]
+  }
+]

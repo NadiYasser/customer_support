@@ -38,6 +38,30 @@ REFUND_APPROVAL_THRESHOLD = float(os.getenv("REFUND_APPROVAL_THRESHOLD", "100.0"
 # app/eval/test_retrieval_precision.py (in-scope >= 0.564, off-topic <= 0.507).
 RAG_RELEVANCE_THRESHOLD = float(os.getenv("RAG_RELEVANCE_THRESHOLD", "0.53"))
 
+# M11 semantic cache: a new question reuses a cached answer only if its cosine
+# similarity to a stored question clears this floor (0..1, higher = more alike).
+# Too low serves the wrong cached answer (e.g. the return-policy answer to a
+# shipping question); too high never matches paraphrases and the cache is dead
+# weight. Gemini embeddings sit in a NARROW band — measured paraphrases score
+# >= 0.726 while different topics top out at 0.674 — so the usable gap is small and
+# 0.70 sits inside it. (A naive "0.9 = very similar" guess would never fire here;
+# we tuned from measurement — see app/eval/test_semantic_cache.py.)
+SEMANTIC_CACHE_THRESHOLD = float(os.getenv("SEMANTIC_CACHE_THRESHOLD", "0.70"))
+
+
+# M13 WhatsApp channel (Meta Cloud API). The adapter reads these at call time.
+#   - VERIFY_TOKEN: a secret string WE invent; Meta echoes it during the webhook
+#     verification handshake so we can confirm the GET came from our configured app.
+#   - ACCESS_TOKEN + PHONE_NUMBER_ID: identify and authorize OUR WhatsApp business
+#     number when we POST a reply to the Graph API.
+# When ACCESS_TOKEN or PHONE_NUMBER_ID is unset we run in MOCK mode: inbound still
+# works, but outbound messages are logged instead of sent — so the whole flow is
+# exercisable locally with no Meta account.
+WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "dev-verify-token")
+WHATSAPP_ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
+WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
+WHATSAPP_API_VERSION = os.getenv("WHATSAPP_API_VERSION", "v21.0")
+
 
 def get_model() -> ChatGroq:
     """Return the shared Groq chat model.
