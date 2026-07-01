@@ -23,6 +23,13 @@ Two fields for M3:
   `route`, used here as a safety gate in FRONT of the orchestrator. It's a plain
   bool (no reducer), so each turn's guard decision overwrites the previous one
   instead of accumulating.
+
+- muted (M14 admin takeover): True when a human admin has taken over this
+  conversation. Unlike `blocked` (recomputed every turn), `muted` must PERSIST
+  across turns until the admin releases it — the webhook checks it to decide
+  whether the agent auto-replies. It survives because the checkpointer restores the
+  whole state each turn and no graph node writes it; only the admin endpoint flips
+  it via update_state. Plain bool, keyed per thread_id, so takeover is per-customer.
 """
 from typing import Annotated, TypedDict
 
@@ -33,3 +40,4 @@ class SupportState(TypedDict):
     messages: Annotated[list, add_messages]
     route: str
     blocked: bool
+    muted: bool

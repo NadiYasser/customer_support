@@ -31,6 +31,7 @@ questions and answers.
 | 11 | [Semantic caching](concepts/11-semantic-caching.md) | Embed the question → reuse a cached answer when a near-duplicate is asked | M11 |
 | 12 | _MCP (Model Context Protocol)_ — **upcoming** | Decouple tools from the agent: a server exposes tools, the agent is a client that discovers/calls them over a transport | M12 |
 | 13 | [Channel adapters & async HITL](concepts/13-channel-adapters-async-hitl.md) | WhatsApp as a swappable transport; async approval via a pending store the dashboard polls | M13 |
+| 14 | [Human-agent handoff (takeover)](concepts/14-human-agent-handoff.md) | Admin console monitors live threads and mutes the agent to reply by hand, then releases it | M14 |
 
 ## The system in one paragraph
 

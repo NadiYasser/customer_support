@@ -12,7 +12,7 @@ one shot, exactly as before.
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 from groq import BadRequestError
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command
 from pydantic import BaseModel
 import json
@@ -220,6 +220,17 @@ async def whatsapp_inbound(request: Request):
     phone, text = parsed
     thread_id = whatsapp.thread_id_for(phone)
     config = {"configurable": {"thread_id": thread_id}}
+
+    # M14 admin takeover. If a human admin has muted this thread, the agent must
+    # stay silent — but we still record the customer's message into the thread
+    # state so (a) the admin sees it in the console and (b) the agent has full
+    # context if the thread is later released. update_state appends via the
+    # add_messages reducer, exactly like a normal turn, minus the agent run.
+    snapshot = support_graph.get_state(config)
+    if snapshot.values.get("muted"):
+        support_graph.update_state(config, {"messages": [HumanMessage(text)]})
+        return {"status": "muted"}
+
     try:
         result = support_graph.invoke({"messages": [HumanMessage(text)]}, config)
     except BadRequestError:
@@ -237,3 +248,120 @@ async def whatsapp_inbound(request: Request):
 
     whatsapp.send_text(phone, result["messages"][-1].content)
     return {"status": "completed"}
+
+
+# --- Admin console (M14) -----------------------------------------------------
+# A small read/write surface over the WhatsApp conversation threads, consumed by
+# the Streamlit admin dashboard. The dashboard never touches the checkpointer
+# directly — it goes through these endpoints, keeping the graph the single owner
+# of conversation state.
+
+
+def _role_of(message) -> str:
+    # Map a LangGraph message object to a role the dashboard can render.
+    # HumanMessage = the WhatsApp customer. AIMessage = agent OR admin — we tag
+    # admin messages with name="admin" when recording them, so we can tell the two
+    # apart in the transcript.
+    if isinstance(message, HumanMessage):
+        return "customer"
+    if isinstance(message, AIMessage):
+        return "admin" if getattr(message, "name", None) == "admin" else "agent"
+    return "system"
+
+
+def _thread_messages(thread_id: str) -> list[dict]:
+    state = support_graph.get_state({"configurable": {"thread_id": thread_id}})
+    msgs = state.values.get("messages", []) if state.values else []
+    out = []
+    for m in msgs:
+        # Only show the human-facing conversation. Tool results (ToolMessage) and
+        # the agent's intermediate tool-CALL turns (AIMessage carrying tool_calls,
+        # empty content) are internal plumbing, not part of the chat an admin
+        # monitors — skip them.
+        if not isinstance(m, (HumanMessage, AIMessage)):
+            continue
+        if getattr(m, "tool_calls", None):
+            continue
+        content = m.content if isinstance(m.content, str) else str(m.content)
+        if content.strip():
+            out.append({"role": _role_of(m), "content": content})
+    return out
+
+
+@app.get("/admin/threads")
+def admin_threads():
+    # List every WhatsApp conversation (wa: threads) with a last-message preview
+    # and its takeover state, for the console's conversation list. We enumerate
+    # distinct thread_ids from the checkpointer, then read each one's tip state.
+    seen = set()
+    for tup in support_graph.checkpointer.list(None):
+        tid = tup.config["configurable"]["thread_id"]
+        if tid.startswith(whatsapp.THREAD_PREFIX):
+            seen.add(tid)
+
+    threads = []
+    for tid in seen:
+        msgs = _thread_messages(tid)
+        if not msgs:
+            continue
+        state = support_graph.get_state({"configurable": {"thread_id": tid}})
+        threads.append(
+            {
+                "thread_id": tid,
+                "phone": tid[len(whatsapp.THREAD_PREFIX):],
+                "muted": bool(state.values.get("muted")),
+                "last": msgs[-1]["content"][:80],
+                "count": len(msgs),
+            }
+        )
+    # Most recently active-looking first isn't reliable without timestamps; sort by
+    # phone for a stable order the admin can scan.
+    threads.sort(key=lambda t: t["phone"])
+    return {"threads": threads}
+
+
+@app.get("/admin/threads/{thread_id}")
+def admin_thread_detail(thread_id: str):
+    state = support_graph.get_state({"configurable": {"thread_id": thread_id}})
+    return {
+        "thread_id": thread_id,
+        "phone": thread_id[len(whatsapp.THREAD_PREFIX):] if thread_id.startswith(whatsapp.THREAD_PREFIX) else thread_id,
+        "muted": bool(state.values.get("muted")) if state.values else False,
+        "messages": _thread_messages(thread_id),
+    }
+
+
+class MuteRequest(BaseModel):
+    thread_id: str
+    muted: bool
+
+
+@app.post("/admin/mute")
+def admin_mute(req: MuteRequest):
+    # Toggle takeover for a thread. Writing muted via update_state persists it in
+    # the checkpointer, so the webhook sees it on the customer's next message.
+    config = {"configurable": {"thread_id": req.thread_id}}
+    support_graph.update_state(config, {"muted": req.muted})
+    return {"thread_id": req.thread_id, "muted": req.muted}
+
+
+class AdminSendRequest(BaseModel):
+    thread_id: str
+    message: str
+
+
+@app.post("/admin/send")
+def admin_send(req: AdminSendRequest):
+    # Admin intervention: send a message to the customer over WhatsApp AND record
+    # it in the thread state. Recording it (tagged name="admin") keeps the console
+    # transcript complete and gives the agent full context if the thread is later
+    # released back to it. Sending is real (or mock) via the same adapter.
+    if not req.thread_id.startswith(whatsapp.THREAD_PREFIX):
+        return {"status": "error", "detail": "not a WhatsApp thread"}
+    phone = req.thread_id[len(whatsapp.THREAD_PREFIX):]
+    whatsapp.send_text(phone, req.message)
+    support_graph.update_state(
+        {"configurable": {"thread_id": req.thread_id}},
+        {"messages": [AIMessage(req.message, name="admin")]},
+    )
+    return {"status": "sent"}

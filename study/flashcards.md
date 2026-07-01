@@ -358,6 +358,34 @@ Cover the answer, say yours out loud, reveal. One-liners; deep dives live in
 
 ---
 
+## Human-agent handoff (takeover) → [14](concepts/14-human-agent-handoff.md)
+
+**Q: Takeover vs. HITL approval?**
+> HITL pauses one risky action mid-run and resumes on yes/no. Takeover mutes the whole agent
+> for a conversation, indefinitely, at the operator's discretion.
+
+**Q: Where does the `muted` flag live and why?**
+> In the graph state, checkpointed per thread_id — same place as history. Gives per-customer
+> scope + restart-survival for free, next to the messages it gates.
+
+**Q: `muted` vs. `blocked` — same type, what's different?**
+> Both plain bools, no reducer. `blocked` is recomputed every turn; `muted` must PERSIST until
+> the admin flips it. It persists because no graph node writes it — only the admin endpoint.
+
+**Q: Why record the customer's message while muted?**
+> So the admin sees it, and so the agent has full context if the thread is later released.
+> Dropping it would make the agent answer blind afterward.
+
+**Q: How is an admin reply told apart from an agent reply?**
+> Both are AIMessage. Admin messages are tagged name="admin" when recorded; the role mapper
+> reads the tag to split customer/agent/admin. Tool messages are filtered from the transcript.
+
+**Q: How does the console stay live without clicking?**
+> @st.fragment(run_every=4) re-runs just that region every 4s, re-polling threads/detail/pending.
+> Button clicks use st.rerun(scope="fragment") to repaint without a full-page reload.
+
+---
+
 ## Stack lightning round
 
 **Q: Why LangGraph?**
