@@ -20,9 +20,9 @@ from langchain_core.tools import tool
 from langgraph.types import interrupt
 
 from app.config import REFUND_APPROVAL_THRESHOLD
-from app.repositories.orders import OrderRepository
+from app.repositories.orders import get_order_repository
 
-_orders = OrderRepository()
+_orders = get_order_repository()
 
 
 @tool

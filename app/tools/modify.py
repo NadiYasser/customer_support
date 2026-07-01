@@ -7,9 +7,9 @@ tool applies.
 """
 from langchain_core.tools import tool
 
-from app.repositories.orders import OrderRepository
+from app.repositories.orders import get_order_repository
 
-_orders = OrderRepository()
+_orders = get_order_repository()
 
 
 @tool

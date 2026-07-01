@@ -9,6 +9,7 @@ venv/
 .env
 .env.*
 service_account.json
+secrets/*
 # Local vector store
 chroma_db/
 *.sqlite3

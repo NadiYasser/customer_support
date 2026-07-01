@@ -56,6 +56,15 @@ tools + prompt becomes a runnable graph that loops call→tool→call until done
 itself ([tools/orders.py](../../app/tools/orders.py)) is a thin `@tool` wrapper over the
 repository; its docstring tells the model when to use it.
 
+The tool never touches data directly — it calls a **repository**
+([repositories/orders.py](../../app/repositories/orders.py)) that hides *where* the data
+lives. A `get_order_repository()` factory picks the backend from config: an `orders.json`
+mock by default, or a live **Google Sheet** when `GOOGLE_SHEET_ID` is set. Because every
+backend exposes the same methods (`get_order`, `process_refund`, ...), swapping storage is a
+new class plus a one-line factory choice — no tool or agent code changes. (Two gotchas when
+the backend is a live sheet: read with `UNFORMATTED_VALUE` so locale-formatted numbers like
+`"64,99"` aren't mis-parsed, and unmerge stray cells before writing or updates silently drop.)
+
 ## Interview Q&A
 
 **Q: What is an "agent" versus a plain LLM call?**

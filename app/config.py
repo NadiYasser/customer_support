@@ -26,6 +26,13 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001")
 CHROMA_DIR = "chroma_db"
 KB_COLLECTION = "knowledge_base"
 
+# Order backend selection. When both GOOGLE_SHEET_ID and the credentials file are
+# set we back orders with a live Google Sheet; otherwise we fall back to the local
+# orders.json mock. Nothing above the repository (tools, agents) knows which is in
+# use — that's the whole point of the repository interface.
+GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "")
+GOOGLE_SHEET_CREDENTIALS = os.getenv("GOOGLE_SHEET_CREDENTIALS", "service_account.json")
+
 # M5 HITL: refunds at/above this amount pause for human approval (interrupt()).
 # Below it, the refund tool writes immediately. Read from env so the gate is
 # tunable without code changes.

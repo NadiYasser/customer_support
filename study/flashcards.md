@@ -26,6 +26,18 @@ Cover the answer, say yours out loud, reveal. One-liners; deep dives live in
 **Q: When does the loop stop?**
 > When the model returns a normal message with no tool call — that message is the answer.
 
+**Q: What does the repository pattern behind the tools buy you?**
+> Tools call `_orders.get_order(...)` and don't know where data lives. Swapping the JSON mock
+> for a live Google Sheet is a new class with the same methods + a one-line factory choice —
+> no tool/agent changes.
+
+**Q: How is the order backend chosen (mock vs Google Sheet)?**
+> `get_order_repository()` reads config: `GOOGLE_SHEET_ID` set → live sheet, else `orders.json`.
+
+**Q: Two traps wiring a live Google Sheet?**
+> Reads: use `UNFORMATTED_VALUE` or locale-formatted `"64,99"` mis-parses to `6499`. Writes:
+> unmerge stray cells first, or updates silently drop into merged blocks.
+
 ---
 
 ## Multi-agent orchestration → [02](concepts/02-multi-agent-orchestration.md)

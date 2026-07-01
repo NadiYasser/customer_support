@@ -7,10 +7,10 @@ instruction the model reads to decide WHEN and HOW to call this function.
 """
 from langchain_core.tools import tool
 
-from app.repositories.orders import OrderRepository
+from app.repositories.orders import get_order_repository
 
-# One shared repository instance (loads orders.json once).
-_orders = OrderRepository()
+# One shared repository instance (Google Sheet if configured, else orders.json).
+_orders = get_order_repository()
 
 
 @tool
